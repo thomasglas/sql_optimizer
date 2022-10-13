@@ -6,14 +6,23 @@
 #include <pg_query.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <iostream>
 #include "protobuf/pg_query.pb-c.h"
-#include "jsoncpp.cpp"
 #include "relational_algebra.h"
 
 size_t testCount = 1;
 const char* tests[] = {
   "SELECT s.name, s.id from students s where s.id=1",
   "SELECT e.grade from exams e, students s where e.sid=s.id"
+  // "select s.name, e.course "
+  // "from students s, exams e "
+  // "where s.id=e.sid and "
+  //     "(s.major = 'CS' or s.major = 'Games Eng') and "
+  //     "e.grade>=(select avg(e2.grade)+1 "
+  //         "from exams e2 "
+  //         "where s.id=e2.sid or "
+  //             "(e2.curriculum=s.major and "
+  //             "s.year>e2.date));"
 };
 
 void parse_json(){
@@ -29,14 +38,6 @@ void parse_json(){
     } else {
       printf("%s\n", result.parse_tree);
     }
-    
-    std::istringstream iss(result.parse_tree);
-    Json::Value root;
-    iss >> root;
-    std::string encoding = root["version"].asString();
-    std::cout << encoding << std::endl;
-    // printf("%s\n", root.get("version", "UTF-8").asCString());
-    std::cout << root <<std::endl;
     pg_query_free_parse_result(result);
   }
 }
@@ -205,20 +206,6 @@ void parse_protobuf(){
       printRaTree(pr);
     }
   }
-}
-
-void generate_protobuf(){
-  // create a new protobuf and deparse it
-  // final product: PgQueryProtobuf
-  // PgQueryProtobuf = packed PgQuery__ParseResult 
-
-  // PgQueryProtobuf* result;
-  // PgQuery__ParseResult* parse_result;
-  // pg_query__parse_result__init(parse_result);
-  // parse_result->stmts
-
-  // pg_query::ParseResult parseResult;
-
 }
 
 int main() {
