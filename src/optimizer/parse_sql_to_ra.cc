@@ -158,58 +158,57 @@ Ra__Node* parse_where_expression(PgQuery__Node* node){
 // return linear subtree with selections
 Ra__Node* parse_where(PgQuery__SelectStmt* select_stmt){
 
-    Ra__Node* subtree_root = new Ra__Node();
-    subtree_root->node_case = Ra__Node__NodeCase::RA__NODE__ROOT;
-
     // edge case: no where clause
     if(select_stmt->where_clause==nullptr){
-        return subtree_root;
+        return nullptr;
     }  
 
     Ra__Node__Selection* sel = new Ra__Node__Selection();
     sel->predicate = parse_where_expression(select_stmt->where_clause);
 
-    subtree_root->childNodes.push_back(sel);
-    
-    // can only return linear subtree
-    assert(subtree_root->childNodes.size()==1);
-    return subtree_root->childNodes[0];
+    return sel;
 }
 
 // return subtree with crossproducts & relations
 Ra__Node* parse_from(PgQuery__SelectStmt* select_stmt){
 
-    Ra__Node* subtree_root = new Ra__Node();
-    subtree_root->node_case = Ra__Node__NodeCase::RA__NODE__ROOT;
+    // add from clause relations
+    std::vector<Ra__Node__Relation*> relations;
+    for(size_t j=0; j<select_stmt->n_from_clause; j++){
+        PgQuery__RangeVar* from_range_var = select_stmt->from_clause[j]->range_var;
+        Ra__Node__Relation* relation = new Ra__Node__Relation();
+        relation->alias = from_range_var->alias->aliasname;
+        relation->name = from_range_var->relname;
+        relations.push_back(relation);
+    }
 
-    // // add from clause relations
-    // std::vector<std::vector<std::string>> relations;
-    // for(size_t j=0; j<select_stmt->n_from_clause; j++){
-    // std::vector<std::string> relation;
-    // PgQuery__Node* from_clause = select_stmt->from_clause[j];
-    // PgQuery__RangeVar* from_range_var = from_clause->range_var;
-    // relation.push_back(from_range_var->relname);
-    // relation.push_back(from_range_var->alias->aliasname);
-    // relations.push_back(relation);
-    // }
-    // Selection* sel = (Selection*)innerNode;
-    // sel->innerNode = new Relations(relations);
+    if(relations.size()==1){
+        return relations[0];
+    }
 
-    // can only return linear subtree
-    assert(subtree_root->childNodes.size()==1);
-    return subtree_root->childNodes[0];
+    Ra__Node__Cross_Product* cp = new Ra__Node__Cross_Product();
+    Ra__Node__Cross_Product** it = &cp;
+    for(size_t i=0; i<relations.size()-2; i++){
+        (*it)->childNodes.push_back(relations[i]);
+        (*it)->childNodes.push_back(new Ra__Node__Cross_Product());
+        *it = static_cast<Ra__Node__Cross_Product*>((*it)->childNodes[1]);
+    }
+    (*it)->childNodes.push_back(relations[relations.size()-2]);
+    (*it)->childNodes.push_back(relations[relations.size()-1]);
+
+    return cp;
 }
 
-Ra__Node* parse_queries(std::vector<const char*> queries){
+Ra__Node* parse_query(const char* query){
 
-  std::cout << "Parsing protobuf" << std::endl;
+    std::cout << "Parsing protobuf" << std::endl;
 
-  for(auto query: queries){
     PgQueryProtobufParseResult result;  
     result = pg_query_parse_protobuf(query);
     PgQuery__ParseResult* parse_result;
     parse_result = pg_query__parse_result__unpack(NULL, result.parse_tree.len, (const uint8_t*) result.parse_tree.data);
-    
+
+    // currently only supports parsing the first statement
     for(size_t i=0; i<parse_result->n_stmts; i++){
         PgQuery__RawStmt* raw_stmt = parse_result->stmts[i];
         PgQuery__Node* stmt = raw_stmt->stmt;
@@ -233,16 +232,15 @@ Ra__Node* parse_queries(std::vector<const char*> queries){
         temp->childNodes.push_back(selections);
 
         
-        // /* FROM */
-        // Ra__Node* cross_products = parse_from(stmt->select_stmt);
+        /* FROM */
+        Ra__Node* cross_products = parse_from(stmt->select_stmt);
         
-        // // add cross products to bottom of linear subtree
-        // while(temp->childNodes.size()>0){
-        //     temp = temp->childNodes[0];
-        // }
-        // temp->childNodes.push_back(cross_products);
+        // add cross products to bottom of linear subtree
+        while(temp->childNodes.size()>0){
+            temp = temp->childNodes[0];
+        }
+        temp->childNodes.push_back(cross_products);
 
         return root;
     }
-  }
 }

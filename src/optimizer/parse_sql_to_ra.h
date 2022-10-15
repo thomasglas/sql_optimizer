@@ -3,6 +3,6 @@
 
 #include "relational_algebra.h"
 
-Ra__Node* parse_queries(std::vector<const char*> queries);
+Ra__Node* parse_query(const char* query);
 
 #endif

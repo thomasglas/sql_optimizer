@@ -87,7 +87,7 @@ class Ra__Node__Selection: public Ra__Node {
 class Ra__Node__Relation: public Ra__Node {
     public:
         Ra__Node__Relation(){
-            node_case = Ra__Node__NodeCase::RA__NODE__SELECTION;
+            node_case = Ra__Node__NodeCase::RA__NODE__RELATION;
         }
         std::string name;
         std::string alias;
