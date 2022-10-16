@@ -13,24 +13,7 @@ std::string parse_expression(Ra__Node__Expression* expression){
     size_t i = 0;
     do{
         if(i>0){
-            switch(expression->operators[i-1]){
-                case RA__ARITHMETIC_OPERATOR__PLUS: {
-                    result += "+"; 
-                    break;
-                }
-                case RA__ARITHMETIC_OPERATOR__MINUS: {
-                    result += "-"; 
-                    break;
-                }
-                case RA__ARITHMETIC_OPERATOR__MULTIPLY: {
-                    result += "*"; 
-                    break;
-                }
-                case RA__ARITHMETIC_OPERATOR__DIVIDE: {
-                    result += "/"; 
-                    break;
-                }
-            }
+            result += expression->operators[i-1];
         }
         switch(expression->consts_attributes[i]->node_case){
             case RA__NODE__CONST: {
@@ -48,10 +31,14 @@ std::string parse_expression(Ra__Node__Expression* expression){
         i++;
     }while(i<expression->consts_attributes.size());
     
+    if(expression->rename.size()>0){
+        result += " as " + expression->rename;
+    }
+
     return result;
 }
 
-std::string generate_select(Ra__Node* node, std::map<std::string,std::string> rename_map){
+std::string generate_select(Ra__Node* node){
     std::string result = "";
     auto projection = static_cast<Ra__Node__Projection*>(node);
 
@@ -102,34 +89,7 @@ std::string deparse_predicate(Ra__Node* node){
         }
         case RA__NODE__PREDICATE: {
             Ra__Node__Predicate* p = static_cast<Ra__Node__Predicate*>(node);
-            std::string op;
-            switch(p->binaryOperator){
-                case RA__BINARY_OPERATOR__EQ: {
-                    op = "=";   
-                    break;
-                }
-                case RA__BINARY_OPERATOR__NEQ: {
-                    op = "<>";   
-                    break;
-                }
-                case RA__BINARY_OPERATOR__GREATER: {
-                    op = ">";   
-                    break;
-                }
-                case RA__BINARY_OPERATOR__LESS: {
-                    op = "<";   
-                    break;
-                }
-                case RA__BINARY_OPERATOR__GREATER_EQ: {
-                    op = ">=";   
-                    break;
-                }
-                case RA__BINARY_OPERATOR__LESS_EQ: {
-                    op = "<=";   
-                    break;
-                }
-            }
-            return deparse_predicate(p->left) + op + deparse_predicate(p->right);
+            return deparse_predicate(p->left) + p->binaryOperator + deparse_predicate(p->right);
         }
         case RA__NODE__EXPRESSION: {
             Ra__Node__Expression* expression = static_cast<Ra__Node__Expression*>(node);
@@ -152,7 +112,7 @@ std::string generate_from(Ra__Node* node){
     return relation->alias.length()>0 ? relation->name + " " + relation->alias : relation->name;
 }
 
-void ra_tree_dfs(Ra__Node* node, std::string& select, std::string& where, std::string& from, std::map<std::string,std::string>& rename_map){
+void ra_tree_dfs(Ra__Node* node, std::string& select, std::string& where, std::string& from){
 
     switch(node->node_case){
         case RA__NODE__SELECTION: {
@@ -160,14 +120,14 @@ void ra_tree_dfs(Ra__Node* node, std::string& select, std::string& where, std::s
             break;
         }
         case RA__NODE__PROJECTION: {
-            select += generate_select(node, rename_map) + ", ";
+            select += generate_select(node) + ", ";
             break;
         }
-        case RA__NODE__RENAME: {
-            auto rename = static_cast<Ra__Node__Rename*>(node);
-            rename_map[rename->old_to_string()]=rename->new_to_string();
-            break;
-        }
+        // case RA__NODE__RENAME: {
+        //     auto rename = static_cast<Ra__Node__Rename*>(node);
+        //     rename_map[rename->old_to_string()]=rename->new_to_string();
+        //     break;
+        // }
         case RA__NODE__RELATION: {
             from += generate_from(node) + ", ";
             break;
@@ -179,24 +139,24 @@ void ra_tree_dfs(Ra__Node* node, std::string& select, std::string& where, std::s
     }
     for(auto child: node->childNodes){
         // recurse: 
-        ra_tree_dfs(child, select, where, from, rename_map);
+        ra_tree_dfs(child, select, where, from);
     }
 }
 
 std::string deparse_ra(Ra__Node* ra_root){
 
-    std::map<std::string,std::string> rename_map;
     std::string select = "";
     std::string from = "";
     std::string where = "";
 
-    ra_tree_dfs(ra_root, select, where, from, rename_map);
-
-    select.pop_back();
-    select.pop_back();
+    ra_tree_dfs(ra_root, select, where, from);
 
     if(select.length()==0){
         select = "*";
+    }
+    else{
+        select.pop_back();
+        select.pop_back();
     }
     std::string sql = "select " + select + "\n";
     
@@ -211,26 +171,4 @@ std::string deparse_ra(Ra__Node* ra_root){
     }
 
     return sql;
-
-    // std::string select = "select ";
-    // for(auto attr: pr->attributes){
-    //     select += attr->attribute[0] + "." + attr->attribute[1] + ", ";
-    // }
-    // select.pop_back();
-    // select.pop_back();
-
-//   std::string from = "from ";
-//   Selection* sel = static_cast<Selection*>(pr->innerNode);
-//   Relations* rel = static_cast<Relations*>(sel->innerNode);
-//   for(auto relation: rel->relations){
-//       from += relation[0] + " " + relation[1] + ", ";
-//   }
-//   from.pop_back();
-//   from.pop_back();
-
-  
-//   std::string where = "where ";
-//   where += sel->p->left->toString() + sel->p->binaryOperator + sel->p->right->toString();
-
-//   std::cout << select << "\n" << from << "\n" << where << "\n" << std::endl;
 }

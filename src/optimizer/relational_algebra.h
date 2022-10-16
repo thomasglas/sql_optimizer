@@ -42,6 +42,12 @@ typedef enum {
     RA__BINARY_OPERATOR__LESS_EQ = 5
 } Ra__Binary_Operator;
 
+typedef enum {
+    RA__CONST_DATATYPE__INT = 0,
+    RA__CONST_DATATYPE__FLOAT = 1,
+    RA__CONST_DATATYPE__STRING = 2,
+} Ra__Const_DataType;
+
 class Ra__Node;
 class Ra__Node__Cross_Product;
 class Ra__Node__Projection;
@@ -124,7 +130,8 @@ class Ra__Node__Predicate: public Ra__Node {
         Ra__Node__Predicate();
         Ra__Node__Expression* left;
         Ra__Node__Expression* right;
-        Ra__Binary_Operator binaryOperator;
+        // Ra__Binary_Operator binaryOperator;
+        std::string binaryOperator;
 };
 
 class Ra__Node__Expression: public Ra__Node {
@@ -133,7 +140,9 @@ class Ra__Node__Expression: public Ra__Node {
             node_case = Ra__Node__NodeCase::RA__NODE__EXPRESSION;
         }
         std::vector<Ra__Node*> consts_attributes;
-        std::vector<Ra__Arithmetic_Operator__OperatorCase> operators;
+        // std::vector<Ra__Arithmetic_Operator__OperatorCase> operators;
+        std::vector<std::string> operators;
+        std::string rename;
 };
 
 class Ra__Node__Attribute: public Ra__Node {
@@ -155,16 +164,16 @@ class Ra__Node__Constant: public Ra__Node  {
         }
         std::string to_string(){
             switch(dataType){
-                case 0: return std::to_string(i);
-                case 1: return std::to_string(f);
-                case 2: return str;
+                case RA__CONST_DATATYPE__INT: return std::to_string(i);
+                case RA__CONST_DATATYPE__FLOAT: return std::to_string(f);
+                case RA__CONST_DATATYPE__STRING: return str;
             }
         }
 
         int i;
         float f;
         std::string str;
-        int dataType; //0:i, 1:f, 2:str
+        Ra__Const_DataType dataType;
 };
 
 #endif
