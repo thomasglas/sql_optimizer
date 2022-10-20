@@ -19,12 +19,22 @@ void parse_expression(PgQuery__Node* node, Ra__Node__Expression* ra_expr){
             Ra__Node__Attribute* attr = new Ra__Node__Attribute();
             switch(columnRef->n_fields){
                 case 1: {
-                    attr->name = columnRef->fields[0]->string->str;
+                    if(columnRef->fields[0]->node_case==PG_QUERY__NODE__NODE_A_STAR){
+                        attr->name = "*";
+                    }
+                    else{
+                        attr->name = columnRef->fields[0]->string->str;
+                    }
                     break; 
                 }
                 case 2: {
-                    attr->alias = columnRef->fields[0]->string->str; 
-                    attr->name = columnRef->fields[1]->string->str;
+                    attr->alias = columnRef->fields[0]->string->str;
+                    if(columnRef->fields[1]->node_case==PG_QUERY__NODE__NODE_A_STAR){
+                        attr->name = "*";
+                    }
+                    else{
+                        attr->name = columnRef->fields[1]->string->str;
+                    } 
                     break;
                 } 
             }
@@ -85,17 +95,8 @@ Ra__Node* parse_select(PgQuery__SelectStmt* select_stmt){
     Ra__Node* subtree_root = new Ra__Node();
     subtree_root->node_case = Ra__Node__NodeCase::RA__NODE__ROOT;
     Ra__Node* it = subtree_root;
-
-    // Handle edge case: select *
-    if(select_stmt->n_target_list==1 &&
-        select_stmt->target_list[0]->res_target->val->node_case==PG_QUERY__NODE__NODE_COLUMN_REF && 
-        select_stmt->target_list[0]->res_target->val->column_ref->fields[0]->node_case == PG_QUERY__NODE__NODE_A_STAR)
-    {
-        return nullptr;
-    }
     
     Ra__Node__Projection* pr = new Ra__Node__Projection();
-    std::vector<Ra__Node__Rename*> renames;
 
     // loop through each select target
     for(size_t j=0; j<select_stmt->n_target_list; j++){
@@ -110,7 +111,6 @@ Ra__Node* parse_select(PgQuery__SelectStmt* select_stmt){
             ra_expr->rename=res_target->name;
         }
     }
-
     return pr;
 }
 
@@ -301,9 +301,7 @@ Ra__Node* parse_query(const char* query){
 
         /* SELECT */
         Ra__Node* projections = parse_select(stmt->select_stmt);
-        if(projections != nullptr){
-            root->childNodes.push_back(projections);
-        }
+        root->childNodes.push_back(projections);
         
 
         /* WHERE */

@@ -65,7 +65,12 @@ std::string deparse_predicate(Ra__Node* node){
                 case RA__BOOL_OPERATOR__AND: {
                     op = " and ";   
                     for(auto arg: p->args){
-                        result += deparse_predicate(arg) + op;
+                        if(arg->node_case==RA__NODE__BOOL_PREDICATE){
+                            result += "(" + deparse_predicate(arg) + ")" + op;
+                        }
+                        else{
+                            result += deparse_predicate(arg) + op;
+                        }
                     }
                     for(size_t i=0; i<op.length();i++){
                         result.pop_back();
@@ -75,7 +80,12 @@ std::string deparse_predicate(Ra__Node* node){
                 case RA__BOOL_OPERATOR__OR: {
                     op = " or ";    
                     for(auto arg: p->args){
-                        result += deparse_predicate(arg) + op;
+                        if(arg->node_case==RA__NODE__BOOL_PREDICATE){
+                            result += "(" + deparse_predicate(arg) + ")" + op;
+                        }
+                        else{
+                            result += deparse_predicate(arg) + op;
+                        }
                     }
                     for(size_t i=0; i<op.length();i++){
                         result.pop_back();
@@ -85,7 +95,12 @@ std::string deparse_predicate(Ra__Node* node){
                 case RA__BOOL_OPERATOR__NOT: {
                     op = "not ";
                     for(auto arg: p->args){
-                        result += op + deparse_predicate(arg);
+                        if(arg->node_case==RA__NODE__BOOL_PREDICATE){
+                            result += op + "(" + deparse_predicate(arg) + ")";
+                        }
+                        else{
+                            result += op + deparse_predicate(arg);
+                        }
                     }
                     break;
                 }

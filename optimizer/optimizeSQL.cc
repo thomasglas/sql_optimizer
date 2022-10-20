@@ -14,15 +14,16 @@
 
 size_t testCount = 1;
 std::vector<const char*> tests = {
-  // "SELECT s.name, s.id from students s, exams e where s.id=1 and s.name='Thomas' or not s.avg>2.0",
-  // "SELECT s.id from students s where 1=1",
-  // "SELECT s.id as foo from students s",
-  // "SELECT * from students",
-  // "SELECT e.grade from exams e, students s where e.sid=s.id",
-  // "SELECT 5, 5.0, 'Thomas'" ,
-  // "SELECT s.id+5-2 from students s where s.id-4<>1",
-  // "SELECT max(s.id), min(s.id+4), max(s.id)+4 from students s"
-  "select s.name from students s where s.id = (select min(s2.id) from students s2)" // or/and s.id = (select max(s3.id) from students s3)
+  "SELECT s.name, s.id from students s, exams e where s.id=1 and s.name='Thomas' or not s.avg>2.0",
+  "SELECT s.id from students s where 1=1",
+  "SELECT s.id as foo from students s",
+  "SELECT * from students",
+  "SELECT e.grade from exams e, students s where e.sid=s.id",
+  "SELECT 5, 5.0, 'Thomas'" ,
+  "SELECT s.id+5-2 from students s where s.id-4<>1",
+  "SELECT max(s.id), min(s.id+4), max(s.id)+4 from students s",
+  "select s.name from students s where s.id = (select min(s2.id) from students s2)", // or/and s.id = (select max(s3.id) from students s3)
+  "select * from students where a=1 and (b=2 or c=3)"
 };
   
 void parse_json(){
