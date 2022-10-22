@@ -7,6 +7,8 @@
 
 Ra__Node* parse_a_expr(PgQuery__Node* expr);
 Ra__Node* parse_from(PgQuery__SelectStmt* select_stmt);
+Ra__Node* parse_select_statement(PgQuery__SelectStmt* select_stmt);
+Ra__Node* parse_where_expression(PgQuery__Node* node, std::vector<Ra__Node*>& childNodes);
 
 // pushes to Ra__Node__Expression const/attributes & operators
 // input PgQuery__Node* = PG_QUERY__NODE__NODE_COLUMN_REF/PG_QUERY__NODE__NODE_A_CONST/PG_QUERY__NODE__NODE_A_EXPR
@@ -68,8 +70,18 @@ void parse_expression(PgQuery__Node* node, Ra__Node__Expression* ra_expr){
         }
         case PG_QUERY__NODE__NODE_A_EXPR: {
             PgQuery__AExpr* a_expr = node->a_expr;
-            parse_expression(a_expr->lexpr, ra_expr);
-            parse_expression(a_expr->rexpr, ra_expr);
+            if(a_expr->lexpr==nullptr){
+                ra_expr->args.push_back(new Ra__Node__Dummy());
+            }
+            else{
+                parse_expression(a_expr->lexpr, ra_expr);
+            }
+            if(a_expr->rexpr == nullptr){
+                ra_expr->args.push_back(new Ra__Node__Dummy());
+            }
+            else{
+                parse_expression(a_expr->rexpr, ra_expr);
+            }
             ra_expr->operators.push_back(a_expr->name[0]->string->str);
             return;
         }
@@ -88,7 +100,6 @@ void parse_expression(PgQuery__Node* node, Ra__Node__Expression* ra_expr){
     }
 }
 
-
 // return linear subtree with projections
 Ra__Node* parse_select(PgQuery__SelectStmt* select_stmt){
 
@@ -99,18 +110,64 @@ Ra__Node* parse_select(PgQuery__SelectStmt* select_stmt){
     Ra__Node__Projection* pr = new Ra__Node__Projection();
 
     // loop through each select target
-    for(size_t j=0; j<select_stmt->n_target_list; j++){
-        PgQuery__Node* target = select_stmt->target_list[j];
+    for(size_t i=0; i<select_stmt->n_target_list; i++){
+        PgQuery__Node* target = select_stmt->target_list[i];
         PgQuery__ResTarget* res_target = target->res_target;
         Ra__Node__Expression* ra_expr = new Ra__Node__Expression();
         
         parse_expression(res_target->val, ra_expr);
-        pr->expressions.push_back(ra_expr);
+        pr->args.push_back(ra_expr);
 
         if(strlen(res_target->name) > 0){
             ra_expr->rename=res_target->name;
         }
     }
+
+    // group by
+    if(select_stmt->n_group_clause > 0){
+        Ra__Node__Group_By* group_by = new Ra__Node__Group_By();
+        for(size_t i=0; i<select_stmt->n_group_clause; i++){
+            PgQuery__Node* group_clause = select_stmt->group_clause[i];
+            Ra__Node__Expression* ra_expr = new Ra__Node__Expression();
+            
+            parse_expression(group_clause, ra_expr);
+            group_by->args.push_back(ra_expr);
+        }
+        if(select_stmt->having_clause!=nullptr){
+            Ra__Node__Having* having = new Ra__Node__Having();
+            Ra__Node__Dummy* dummy = new Ra__Node__Dummy(); 
+            having->predicate = parse_where_expression(select_stmt->having_clause, dummy->childNodes);
+            group_by->has_having = true;
+            group_by->having = having;
+        }
+        pr->has_group_by = true;
+        pr->group_by = group_by;
+    }
+
+    // order by
+    if(select_stmt->n_sort_clause > 0){
+        Ra__Node__Order_By* order_by = new Ra__Node__Order_By();
+        for(size_t i=0; i<select_stmt->n_sort_clause; i++){
+            PgQuery__Node* sort_clause = select_stmt->sort_clause[i];
+            Ra__Node__Expression* ra_expr = new Ra__Node__Expression();
+            parse_expression(sort_clause->sort_by->node, ra_expr);
+            order_by->args.push_back(ra_expr);
+            switch(sort_clause->sort_by->sortby_dir){
+                case PG_QUERY__SORT_BY_DIR__SORTBY_DEFAULT:
+                case PG_QUERY__SORT_BY_DIR__SORTBY_ASC:{
+                    order_by->directions.push_back(true);
+                    break;
+                }
+                case PG_QUERY__SORT_BY_DIR__SORTBY_DESC:{
+                    order_by->directions.push_back(false);
+                    break;
+                }
+            }
+        }
+        pr->has_order_by = true;
+        pr->order_by = order_by;
+    }
+
     return pr;
 }
 
@@ -154,12 +211,12 @@ Ra__Node* parse_where_expression(PgQuery__Node* node, std::vector<Ra__Node*>& ch
                 PgQuery__SubLink* sub_link = a_expr->lexpr->sub_link;
                 Ra__Node__Cross_Product* cp = new Ra__Node__Cross_Product();
                 Ra__Node__Attribute* attr = new Ra__Node__Attribute();
-                Ra__Node__Projection* pr = static_cast<Ra__Node__Projection*>(parse_select(sub_link->subselect->select_stmt));
+                Ra__Node__Projection* pr = static_cast<Ra__Node__Projection*>(parse_select_statement(sub_link->subselect->select_stmt));
                 
                 // selection predicate
-                pr->expressions[0]->rename = "temp_attr";
+                pr->args[0]->rename = "temp_attr"; // nested select can only produce one output
                 pr->subquery_alias = "temp_alias";
-                attr->name = pr->expressions[0]->rename;
+                attr->name = pr->args[0]->rename;
                 attr->alias = pr->subquery_alias;
                 ra_l_expr->args.push_back(attr);
                 
@@ -175,14 +232,12 @@ Ra__Node* parse_where_expression(PgQuery__Node* node, std::vector<Ra__Node*>& ch
                 PgQuery__SubLink* sub_link = a_expr->rexpr->sub_link;
                 Ra__Node__Cross_Product* cp = new Ra__Node__Cross_Product();
                 Ra__Node__Attribute* attr = new Ra__Node__Attribute();
-                Ra__Node__Projection* pr = static_cast<Ra__Node__Projection*>(parse_select(sub_link->subselect->select_stmt));
-                Ra__Node* relations = parse_from(sub_link->subselect->select_stmt);
+                Ra__Node__Projection* pr = static_cast<Ra__Node__Projection*>(parse_select_statement(sub_link->subselect->select_stmt));
 
                 // selection predicate
-                pr->expressions[0]->rename = "temp_attr";
+                pr->args[0]->rename = "temp_attr"; // nested select can only produce one output
                 pr->subquery_alias = "temp_alias";
-                pr->childNodes.push_back(relations);
-                attr->name = pr->expressions[0]->rename;
+                attr->name = pr->args[0]->rename;
                 attr->alias = pr->subquery_alias;
                 ra_r_expr->args.push_back(attr);
                 
@@ -198,15 +253,6 @@ Ra__Node* parse_where_expression(PgQuery__Node* node, std::vector<Ra__Node*>& ch
             p->right = ra_r_expr;
 
             return p;
-        }
-        case PG_QUERY__NODE__NODE_SUB_LINK: {
-            // switch case PG_QUERY__SUB_LINK_TYPE__EXPR_SUBLINK
-            PgQuery__SubLink* sub_link = node->sub_link;
-            Ra__Node__Cross_Product* cp = new Ra__Node__Cross_Product();
-            Ra__Node__Projection* pr = static_cast<Ra__Node__Projection*>(parse_select(sub_link->subselect->select_stmt));
-            pr->subquery_alias = "temp";
-            cp->childNodes.push_back(pr);
-            childNodes.push_back(cp);
         }
     }
 }
@@ -282,7 +328,34 @@ bool find_empty_leaf(Ra__Node** it){
     return found;
 }
 
-Ra__Node* parse_query(const char* query){
+Ra__Node* parse_select_statement(PgQuery__SelectStmt* select_stmt){
+
+    /* SELECT */
+    Ra__Node* projection = parse_select(select_stmt);
+    
+    Ra__Node* it = projection;
+
+    /* WHERE */
+    Ra__Node* selections = parse_where(select_stmt);
+    if(selections != nullptr){
+        // add selections to bottom of linear subtree
+        find_empty_leaf(&it);
+        it->childNodes.push_back(selections);
+    }
+
+    /* FROM */
+    Ra__Node* cross_products = parse_from(select_stmt);
+    if(cross_products != nullptr){
+        // add cross products to first empty child ("where" could have produced cp already)
+        find_empty_leaf(&it);
+        it->childNodes.push_back(cross_products);
+    }
+
+    std::cout << projection->to_string() <<std::endl;
+    return projection;
+};
+
+Ra__Node* parse_sql_query(const char* query){
 
     PgQueryProtobufParseResult result;  
     result = pg_query_parse_protobuf(query);
@@ -294,34 +367,6 @@ Ra__Node* parse_query(const char* query){
         PgQuery__RawStmt* raw_stmt = parse_result->stmts[i];
         PgQuery__Node* stmt = raw_stmt->stmt;
 
-        Ra__Node* root = new Ra__Node();
-        Ra__Node* it = root;
-        root->node_case = Ra__Node__NodeCase::RA__NODE__ROOT;
-        root->n_children = 1;
-
-        /* SELECT */
-        Ra__Node* projections = parse_select(stmt->select_stmt);
-        root->childNodes.push_back(projections);
-        
-
-        /* WHERE */
-        Ra__Node* selections = parse_where(stmt->select_stmt);
-        if(selections != nullptr){
-            // add selections to bottom of linear subtree
-            find_empty_leaf(&it);
-            it->childNodes.push_back(selections);
-        }
-
-        
-        /* FROM */
-        Ra__Node* cross_products = parse_from(stmt->select_stmt);
-        if(cross_products != nullptr){
-            // add cross products to first empty child (where could have added cp already)
-            find_empty_leaf(&it);
-            it->childNodes.push_back(cross_products);
-        }
-
-        std::cout << root->childNodes[0]->to_string() <<std::endl;
-        return root;
+        return parse_select_statement(stmt->select_stmt);
     }
 }

@@ -3,6 +3,6 @@
 
 #include "relational_algebra.h"
 
-Ra__Node* parse_query(const char* query);
+Ra__Node* parse_sql_query(const char* query);
 
 #endif

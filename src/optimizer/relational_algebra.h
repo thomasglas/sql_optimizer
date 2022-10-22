@@ -20,7 +20,9 @@ typedef enum {
     RA__NODE__BOOL_PREDICATE = 10,
     RA__NODE__PREDICATE = 11,
     RA__NODE__FUNC_CALL = 12,
-    RA__NODE__DUMMY = 13
+    RA__NODE__DUMMY = 13,
+    RA__NODE__ORDER_BY = 14,
+    RA__NODE__HAVING = 15
 } Ra__Node__NodeCase;
 
 typedef enum {
@@ -62,6 +64,9 @@ class Ra__Node__Predicate;
 class Ra__Node__Expression;
 class Ra__Node__Attribute;
 class Ra__Node__Constant;
+class Ra__Node__Group_By;
+class Ra__Node__Order_By;
+class Ra__Node__Having;
 
 class Ra__Node{
     public:
@@ -93,13 +98,19 @@ class Ra__Node__Projection: public Ra__Node {
         Ra__Node__Projection(){
             node_case = Ra__Node__NodeCase::RA__NODE__PROJECTION;
             n_children = 1;
+            has_group_by = false;
+            has_order_by = false;
         }
         std::string to_string(){
             assert(childNodes.size()==1);
             return "TT(" + childNodes[0]->to_string() + ")";
         }
-        std::vector<Ra__Node__Expression*> expressions; //expression or func call
+        std::vector<Ra__Node__Expression*> args; //expression/case
         std::string subquery_alias;
+        bool has_group_by;
+        bool has_order_by;
+        Ra__Node__Group_By* group_by;
+        Ra__Node__Order_By* order_by;
 };
 
 class Ra__Node__Selection: public Ra__Node {
@@ -127,6 +138,37 @@ class Ra__Node__Relation: public Ra__Node {
             assert(childNodes.size()==0);
             return alias.length()==0 ? name : name + " " + alias;
         }
+};
+
+class Ra__Node__Order_By: public Ra__Node {
+    public:
+        Ra__Node__Order_By(){
+            node_case = Ra__Node__NodeCase::RA__NODE__ORDER_BY;
+            n_children = 0;
+        }
+        std::vector<Ra__Node__Expression*> args; // expressions/attr/const/case
+        std::vector<bool> directions;
+};
+
+class Ra__Node__Group_By: public Ra__Node {
+    public:
+        Ra__Node__Group_By(){
+            node_case = Ra__Node__NodeCase::RA__NODE__GROUP_BY;
+            n_children = 0;
+            has_having = false;
+        }
+        std::vector<Ra__Node__Expression*> args; // expressions/attr/const/case
+        bool has_having;
+        Ra__Node__Having* having;
+};
+
+class Ra__Node__Having: public Ra__Node {
+    public:
+        Ra__Node__Having(){
+            node_case = Ra__Node__NodeCase::RA__NODE__HAVING;
+            n_children = 0;
+        }
+        Ra__Node* predicate; // Ra__Node__Bool_Predicate or Ra__Node__Predicate
 };
 
 // class Ra__Node__Rename: public Ra__Node {
@@ -172,7 +214,6 @@ class Ra__Node__Expression: public Ra__Node {
             n_children = 0;
         }
         std::vector<Ra__Node*> args; //const, attributes, func calls
-        // std::vector<Ra__Arithmetic_Operator__OperatorCase> operators;
         std::vector<std::string> operators;
         std::string rename;
 };
