@@ -22,7 +22,8 @@ typedef enum {
     RA__NODE__FUNC_CALL = 12,
     RA__NODE__DUMMY = 13,
     RA__NODE__ORDER_BY = 14,
-    RA__NODE__HAVING = 15
+    RA__NODE__HAVING = 15,
+    RA__NODE__DEPENDENT_JOIN = 16
 } Ra__Node__NodeCase;
 
 typedef enum {
@@ -52,6 +53,11 @@ typedef enum {
     RA__CONST_DATATYPE__FLOAT = 1,
     RA__CONST_DATATYPE__STRING = 2,
 } Ra__Const_DataType;
+
+typedef enum {
+    RA__OPERATOR_ORIENTATION_LEFT = 0,
+    RA__OPERATOR_ORIENTATION_RIGHT = 1
+} Ra__Operator_Orientation;
 
 class Ra__Node;
 class Ra__Node__Cross_Product;
@@ -93,6 +99,21 @@ class Ra__Node__Cross_Product: public Ra__Node{
         }
 };
 
+class Ra__Node__Dependent_Join: public Ra__Node{
+    public:
+        Ra__Node__Dependent_Join(){
+            node_case = Ra__Node__NodeCase::RA__NODE__DEPENDENT_JOIN;
+            n_children = 2;
+            orientation = RA__OPERATOR_ORIENTATION_LEFT;
+        }
+        std::string to_string(){
+            assert(childNodes.size()==2);
+            return "(" + childNodes[0]->to_string() + ")DJ(" + childNodes[1]->to_string() + ")";
+        }
+        Ra__Node* predicate; // Ra__Node__Bool_Predicate/Ra__Node__Predicate
+        Ra__Operator_Orientation orientation;
+};
+
 class Ra__Node__Projection: public Ra__Node {
     public:
         Ra__Node__Projection(){
@@ -119,7 +140,7 @@ class Ra__Node__Selection: public Ra__Node {
             node_case = Ra__Node__NodeCase::RA__NODE__SELECTION;
             n_children = 1;
         }
-        Ra__Node* predicate; // Ra__Node__Bool_Predicate or Ra__Node__Predicate
+        Ra__Node* predicate; // Ra__Node__Bool_Predicate/Ra__Node__Predicate
         std::string to_string(){
             assert(childNodes.size()==1);
             return "o(" + childNodes[0]->to_string() + ")";
