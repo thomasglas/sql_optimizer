@@ -23,7 +23,7 @@ typedef enum {
     RA__NODE__DUMMY = 13,
     RA__NODE__ORDER_BY = 14,
     RA__NODE__HAVING = 15,
-    RA__NODE__DEPENDENT_JOIN = 16
+    RA__NODE__JOIN = 16
 } Ra__Node__NodeCase;
 
 typedef enum {
@@ -55,9 +55,19 @@ typedef enum {
 } Ra__Const_DataType;
 
 typedef enum {
-    RA__OPERATOR_ORIENTATION_LEFT = 0,
-    RA__OPERATOR_ORIENTATION_RIGHT = 1
-} Ra__Operator_Orientation;
+    RA__JOIN_ORIENTATION_LEFT = 0,
+    RA__JOIN_ORIENTATION_RIGHT = 1
+} Ra__Join_Orientation;
+
+typedef enum {
+    RA__JOIN__INNER = 0,
+    RA__JOIN__DEPENDENT_INNER = 1,
+} Ra__Join_Type;
+
+typedef enum {
+    RA__ORDER_BY_ASC = 0,
+    RA__ORDER_BY_DESC = 1,
+} Ra__Order_By_Direction;
 
 class Ra__Node;
 class Ra__Node__Cross_Product;
@@ -99,19 +109,23 @@ class Ra__Node__Cross_Product: public Ra__Node{
         }
 };
 
-class Ra__Node__Dependent_Join: public Ra__Node{
+class Ra__Node__Join: public Ra__Node{
     public:
-        Ra__Node__Dependent_Join(){
-            node_case = Ra__Node__NodeCase::RA__NODE__DEPENDENT_JOIN;
+        Ra__Node__Join(){
+            node_case = Ra__Node__NodeCase::RA__NODE__JOIN;
             n_children = 2;
-            orientation = RA__OPERATOR_ORIENTATION_LEFT;
         }
         std::string to_string(){
             assert(childNodes.size()==2);
-            return "(" + childNodes[0]->to_string() + ")DJ(" + childNodes[1]->to_string() + ")";
+            std::string op;
+            switch(type){
+                case RA__JOIN__DEPENDENT_INNER: op = "DJ"; break;
+            }
+            return "(" + childNodes[0]->to_string() + ")"+op+"(" + childNodes[1]->to_string() + ")";
         }
         Ra__Node* predicate; // Ra__Node__Bool_Predicate/Ra__Node__Predicate
-        Ra__Operator_Orientation orientation;
+        Ra__Join_Type type;
+        Ra__Join_Orientation orientation;
 };
 
 class Ra__Node__Projection: public Ra__Node {
@@ -130,8 +144,6 @@ class Ra__Node__Projection: public Ra__Node {
         std::string subquery_alias;
         bool has_group_by;
         bool has_order_by;
-        Ra__Node__Group_By* group_by;
-        Ra__Node__Order_By* order_by;
 };
 
 class Ra__Node__Selection: public Ra__Node {
@@ -161,53 +173,46 @@ class Ra__Node__Relation: public Ra__Node {
         }
 };
 
+// sort operator
 class Ra__Node__Order_By: public Ra__Node {
     public:
         Ra__Node__Order_By(){
             node_case = Ra__Node__NodeCase::RA__NODE__ORDER_BY;
-            n_children = 0;
+            n_children = 1;
         }
         std::vector<Ra__Node__Expression*> args; // expressions/attr/const/case
-        std::vector<bool> directions;
+        std::vector<Ra__Order_By_Direction> directions;
+        std::string to_string(){
+            assert(childNodes.size()==1);
+            return "OB(" + childNodes[0]->to_string() + ")";
+        }
 };
 
 class Ra__Node__Group_By: public Ra__Node {
     public:
         Ra__Node__Group_By(){
             node_case = Ra__Node__NodeCase::RA__NODE__GROUP_BY;
-            n_children = 0;
-            has_having = false;
+            n_children = 1;
         }
         std::vector<Ra__Node__Expression*> args; // expressions/attr/const/case
-        bool has_having;
-        Ra__Node__Having* having;
+        std::string to_string(){
+            assert(childNodes.size()==1);
+            return "GB(" + childNodes[0]->to_string() + ")";
+        }
 };
 
 class Ra__Node__Having: public Ra__Node {
     public:
         Ra__Node__Having(){
             node_case = Ra__Node__NodeCase::RA__NODE__HAVING;
-            n_children = 0;
+            n_children = 1;
         }
         Ra__Node* predicate; // Ra__Node__Bool_Predicate or Ra__Node__Predicate
+        std::string to_string(){
+            assert(childNodes.size()==1);
+            return "H(" + childNodes[0]->to_string() + ")";
+        }
 };
-
-// class Ra__Node__Rename: public Ra__Node {
-//     public:
-//         Ra__Node__Rename(){
-//             node_case = Ra__Node__NodeCase::RA__NODE__RENAME;
-//         }
-//         std::string old_to_string(){
-//             return old_alias.length()>0 ? old_alias+"."+old_name : old_name;
-//         }
-//         std::string new_to_string(){
-//             return new_alias.length()>0 ? new_alias+"."+new_name : new_name;
-//         }
-//         std::string old_alias;
-//         std::string old_name;
-//         std::string new_alias;
-//         std::string new_name;
-// };
 
 class Ra__Node__Bool_Predicate: public Ra__Node {
     public:
@@ -263,6 +268,7 @@ class Ra__Node__Constant: public Ra__Node  {
                 case RA__CONST_DATATYPE__INT: return std::to_string(i);
                 case RA__CONST_DATATYPE__FLOAT: return f;
                 case RA__CONST_DATATYPE__STRING: return "'" + str + "'";
+                default: return "tostring error";
             }
         }
 

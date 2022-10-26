@@ -44,13 +44,19 @@ std::string deparse_expression(Ra__Node__Expression* expression){
     return result;
 }
 
-std::string deparse_order_by_expressions(std::vector<Ra__Node__Expression*>& expressions, std::vector<bool>& directions){
+std::string deparse_order_by_expressions(std::vector<Ra__Node__Expression*>& expressions, std::vector<Ra__Order_By_Direction>& directions){
     std::string result = "";
     assert(expressions.size()==directions.size());
     size_t n = expressions.size();
 
     for(size_t i=0; i<n; i++){
-        result += deparse_expression(expressions[i]) + " " + (directions[i]?"asc":"desc") + ", ";
+        std::string direction;
+        switch(directions[i]){
+            case RA__ORDER_BY_ASC: direction = "asc"; break;
+            case RA__ORDER_BY_DESC: direction = "desc"; break;
+            default: std::cout << "deparse order by order error" << std::endl; direction = "";
+        }
+        result += deparse_expression(expressions[i]) + " " + direction + ", ";
     }
     result.pop_back();
     result.pop_back();
@@ -170,19 +176,28 @@ void ra_tree_dfs(Ra__Node* node, size_t layer,
                 select = "select " + deparse_expressions(pr->args) + ", ";
                 layer++;
                 ra_tree_dfs(node->childNodes[0], layer, select, where, from, group_by, having, order_by);
-                if(pr->has_group_by){
-                    group_by += deparse_expressions(pr->group_by->args);
-                    if(pr->group_by->has_having){
-                        having += deparse_predicate(pr->group_by->having->predicate);
-                    }
-                }
-                if(pr->has_order_by){
-                    order_by += deparse_order_by_expressions(pr->order_by->args, pr->order_by->directions);
-                }
             }
             else{
                 from += "(" + deparse_ra(node) + ") as " + pr->subquery_alias + ", "; 
             }
+            break;
+        }
+        case RA__NODE__GROUP_BY: {
+            Ra__Node__Group_By* gb = static_cast<Ra__Node__Group_By*>(node);
+            group_by += deparse_expressions(gb->args);
+            ra_tree_dfs(gb->childNodes[0], layer, select, where, from, group_by, having, order_by);
+            break;
+        }
+        case RA__NODE__ORDER_BY: {
+            Ra__Node__Order_By* ob = static_cast<Ra__Node__Order_By*>(node);
+            order_by += deparse_order_by_expressions(ob->args, ob->directions);
+            ra_tree_dfs(ob->childNodes[0], layer, select, where, from, group_by, having, order_by);
+            break;
+        }
+        case RA__NODE__HAVING: {
+            Ra__Node__Having* ha = static_cast<Ra__Node__Having*>(node);
+            having += deparse_predicate(ha->predicate);
+            ra_tree_dfs(ha->childNodes[0], layer, select, where, from, group_by, having, order_by);
             break;
         }
         case RA__NODE__CROSS_PRODUCT: {

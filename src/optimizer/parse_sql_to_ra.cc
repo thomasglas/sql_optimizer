@@ -154,7 +154,7 @@ void find_expression_attributes(PgQuery__Node* node, std::vector<Ra__Node__Attri
     }
 }
 
-// return linear subtree with projections
+// returns projection
 Ra__Node* parse_select(PgQuery__SelectStmt* select_stmt){
 
     Ra__Node* subtree_root = new Ra__Node();
@@ -175,51 +175,6 @@ Ra__Node* parse_select(PgQuery__SelectStmt* select_stmt){
         if(strlen(res_target->name) > 0){
             ra_expr->rename=res_target->name;
         }
-    }
-
-    // group by
-    if(select_stmt->n_group_clause > 0){
-        Ra__Node__Group_By* group_by = new Ra__Node__Group_By();
-        for(size_t i=0; i<select_stmt->n_group_clause; i++){
-            PgQuery__Node* group_clause = select_stmt->group_clause[i];
-            Ra__Node__Expression* ra_expr = new Ra__Node__Expression();
-            
-            parse_expression(group_clause, ra_expr);
-            group_by->args.push_back(ra_expr);
-        }
-        if(select_stmt->having_clause!=nullptr){
-            Ra__Node__Having* having = new Ra__Node__Having();
-            Ra__Node__Dummy* dummy = new Ra__Node__Dummy(); 
-            having->predicate = parse_where_expression(select_stmt->having_clause, dummy->childNodes);
-            group_by->has_having = true;
-            group_by->having = having;
-        }
-        pr->has_group_by = true;
-        pr->group_by = group_by;
-    }
-
-    // order by
-    if(select_stmt->n_sort_clause > 0){
-        Ra__Node__Order_By* order_by = new Ra__Node__Order_By();
-        for(size_t i=0; i<select_stmt->n_sort_clause; i++){
-            PgQuery__Node* sort_clause = select_stmt->sort_clause[i];
-            Ra__Node__Expression* ra_expr = new Ra__Node__Expression();
-            parse_expression(sort_clause->sort_by->node, ra_expr);
-            order_by->args.push_back(ra_expr);
-            switch(sort_clause->sort_by->sortby_dir){
-                case PG_QUERY__SORT_BY_DIR__SORTBY_DEFAULT:
-                case PG_QUERY__SORT_BY_DIR__SORTBY_ASC:{
-                    order_by->directions.push_back(true);
-                    break;
-                }
-                case PG_QUERY__SORT_BY_DIR__SORTBY_DESC:{
-                    order_by->directions.push_back(false);
-                    break;
-                }
-            }
-        }
-        pr->has_order_by = true;
-        pr->order_by = order_by;
     }
 
     return pr;
@@ -245,12 +200,13 @@ Ra__Node__Cross_Product* parse_subquery(PgQuery__SubLink* sub_link, Ra__Node__Ex
 
 // PgQuery__SubLink, predicate sublink side
 // return dependent join with subtree
-Ra__Node__Dependent_Join* parse_correlated_subquery(PgQuery__SubLink* sub_link, Ra__Node__Expression* predicate_expr){
+Ra__Node__Join* parse_correlated_subquery(PgQuery__SubLink* sub_link, Ra__Node__Expression* predicate_expr){
     
     // dependent join (w. original predicate), put correlated subquery on one side
     // add temprel.tempattr to predicate_expr
 
-    Ra__Node__Dependent_Join* dp = new Ra__Node__Dependent_Join();
+    Ra__Node__Join* dp = new Ra__Node__Join();
+    dp->type = RA__JOIN__DEPENDENT_INNER;
     Ra__Node__Attribute* attr = new Ra__Node__Attribute();
     Ra__Node__Projection* pr = static_cast<Ra__Node__Projection*>(parse_select_statement(sub_link->subselect->select_stmt));
 
@@ -262,7 +218,7 @@ Ra__Node__Dependent_Join* parse_correlated_subquery(PgQuery__SubLink* sub_link, 
     predicate_expr->args.push_back(attr);
 
     // subquery will be on left side
-    dp->orientation = RA__OPERATOR_ORIENTATION_RIGHT;
+    dp->orientation = RA__JOIN_ORIENTATION_RIGHT;
     dp->childNodes.push_back(pr);
     return dp;
 };
@@ -427,6 +383,7 @@ Ra__Node* parse_where_expression(PgQuery__Node* node, std::vector<Ra__Node*>& ch
         //     p->right = ra_r_expr;
         //     return p;
         // }
+        default: std::cout << "error parse where expr" << std::endl; return nullptr;
     }
 }
 
@@ -448,6 +405,7 @@ Ra__Node* parse_where(PgQuery__SelectStmt* select_stmt){
 Ra__Node* parse_from(PgQuery__SelectStmt* select_stmt){
 
     if(select_stmt->n_from_clause==0){
+        // Dummy child for edge case: no from clause
         return new Ra__Node__Dummy();
     }
 
@@ -501,12 +459,91 @@ bool find_empty_leaf(Ra__Node** it){
     return found;
 }
 
+Ra__Node* parse_order_by(PgQuery__SelectStmt* select_stmt){
+
+    if(select_stmt->n_sort_clause == 0){
+        return nullptr;
+    }
+
+    Ra__Node__Order_By* order_by = new Ra__Node__Order_By();
+    for(size_t i=0; i<select_stmt->n_sort_clause; i++){
+        PgQuery__Node* sort_clause = select_stmt->sort_clause[i];
+        Ra__Node__Expression* ra_expr = new Ra__Node__Expression();
+        parse_expression(sort_clause->sort_by->node, ra_expr);
+        order_by->args.push_back(ra_expr);
+        switch(sort_clause->sort_by->sortby_dir){
+            case PG_QUERY__SORT_BY_DIR__SORTBY_DEFAULT:
+            case PG_QUERY__SORT_BY_DIR__SORTBY_ASC:{
+                order_by->directions.push_back(RA__ORDER_BY_ASC);
+                break;
+            }
+            case PG_QUERY__SORT_BY_DIR__SORTBY_DESC:{
+                order_by->directions.push_back(RA__ORDER_BY_DESC);
+                break;
+            }
+        }
+    }
+    return order_by;
+}
+
+Ra__Node* parse_group_by(PgQuery__SelectStmt* select_stmt){
+    if(select_stmt->n_group_clause == 0){
+        return nullptr;
+    }
+
+    Ra__Node__Group_By* group_by = new Ra__Node__Group_By();
+    for(size_t i=0; i<select_stmt->n_group_clause; i++){
+        PgQuery__Node* group_clause = select_stmt->group_clause[i];
+        Ra__Node__Expression* ra_expr = new Ra__Node__Expression();
+        
+        parse_expression(group_clause, ra_expr);
+        group_by->args.push_back(ra_expr);
+    }
+
+    return group_by;
+}
+
+// returns having operator, potentially with subquery underneath
+Ra__Node* parse_having(PgQuery__SelectStmt* select_stmt){
+    
+    if(select_stmt->having_clause==nullptr){
+        return nullptr;
+    }
+
+    Ra__Node__Having* having = new Ra__Node__Having();
+    having->predicate = parse_where_expression(select_stmt->having_clause, having->childNodes);
+    return having;
+}
+
 Ra__Node* parse_select_statement(PgQuery__SelectStmt* select_stmt){
 
     /* SELECT */
     Ra__Node* projection = parse_select(select_stmt);
-    
     Ra__Node* it = projection;
+
+    /* ORDER BY */
+    Ra__Node* sort_operator = parse_order_by(select_stmt);
+    if(sort_operator != nullptr){
+        // add sort underneath projection
+        find_empty_leaf(&it);
+        it->childNodes.push_back(sort_operator);
+    }
+
+    /* HAVING */
+    Ra__Node* having_operator = parse_having(select_stmt);
+    if(having_operator != nullptr){
+        // add sort underneath projection
+        find_empty_leaf(&it);
+        it->childNodes.push_back(having_operator);
+    }
+
+    /* GROUP BY */
+    Ra__Node* group_by = parse_group_by(select_stmt);
+    if(group_by != nullptr){
+        // add sort underneath projection
+        find_empty_leaf(&it);
+        it->childNodes.push_back(group_by);
+    }
 
     /* WHERE */
     Ra__Node* selections = parse_where(select_stmt);
@@ -524,7 +561,6 @@ Ra__Node* parse_select_statement(PgQuery__SelectStmt* select_stmt){
         it->childNodes.push_back(cross_products);
     }
 
-    std::cout << projection->to_string() <<std::endl;
     return projection;
 };
 
@@ -542,4 +578,5 @@ Ra__Node* parse_sql_query(const char* query){
 
         return parse_select_statement(stmt->select_stmt);
     }
+    return nullptr;
 }
