@@ -33,6 +33,10 @@ std::string deparse_expression(Ra__Node__Expression* expression){
                 result += func_call->func_name + "(" + deparse_expressions(func_call->args) + ")";
                 break;
             }
+            case RA__NODE__TYPE_CAST: {
+                Ra__Node__Type_Cast* type_cast = static_cast<Ra__Node__Type_Cast*>(expression->args[i]);
+                result += type_cast->type + deparse_expression(type_cast->expression) + type_cast->typ_mod;
+            }
             case RA__NODE__DUMMY: break; //e.g. (dummy)-name
             default: std::cout << "error deparse select" << std::endl;
         }

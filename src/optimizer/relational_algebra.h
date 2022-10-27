@@ -23,7 +23,8 @@ typedef enum {
     RA__NODE__DUMMY = 13,
     RA__NODE__ORDER_BY = 14,
     RA__NODE__HAVING = 15,
-    RA__NODE__JOIN = 16
+    RA__NODE__JOIN = 16,
+    RA__NODE__TYPE_CAST = 17
 } Ra__Node__NodeCase;
 
 typedef enum {
@@ -72,6 +73,10 @@ typedef enum {
     RA__ORDER_BY__ASC = 0,
     RA__ORDER_BY__DESC = 1,
 } Ra__Order_By__SortDirection;
+
+typedef enum {
+    RA__TYPE_CAST__DATE = 0,
+} Ra__Type_Cast__Type;
 
 typedef enum {
     RA__FUNC_CALL__MIN = 0,
@@ -263,9 +268,23 @@ class Ra__Node__Expression: public Ra__Node {
             node_case = Ra__Node__NodeCase::RA__NODE__EXPRESSION;
             n_children = 0;
         }
-        std::vector<Ra__Node*> args; //const, attributes, func calls
+        std::vector<Ra__Node*> args; //const, attributes, func calls, type cast
         std::vector<std::string> operators;
         std::string rename;
+};
+
+class Ra__Node__Type_Cast: public Ra__Node {
+    public:
+        Ra__Node__Type_Cast(){
+            node_case = Ra__Node__NodeCase::RA__NODE__TYPE_CAST;
+            n_children = 0;
+        }
+        std::string to_string(){
+            return "";
+        }
+        Ra__Node__Expression* expression;
+        std::string type;
+        std::string typ_mod; // interval '2' month
 };
 
 class Ra__Node__Attribute: public Ra__Node {

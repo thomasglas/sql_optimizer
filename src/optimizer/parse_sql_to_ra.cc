@@ -119,6 +119,23 @@ void parse_expression(PgQuery__Node* node, Ra__Node__Expression* ra_expr, bool& 
             ra_expr->args.push_back(ra_func_call);
             break;
         }
+        case PG_QUERY__NODE__NODE_TYPE_CAST:{
+            PgQuery__TypeCast* type_cast = node->type_cast;
+            Ra__Node__Type_Cast* ra_type_cast = new Ra__Node__Type_Cast();
+            ra_type_cast->type = type_cast->type_name->names[type_cast->type_name->n_names-1]->string->str;
+            if(type_cast->type_name->n_typmods>0){
+                switch(type_cast->type_name->typmods[0]->a_const->val->integer->ival){
+                    case 2: ra_type_cast->typ_mod = "month"; break;
+                    case 4: ra_type_cast->typ_mod = "year"; break;
+                    case 8: ra_type_cast->typ_mod = "day"; break;
+                    default: std::cout << "type cast typmod not supported" << std::endl;
+                };
+            }
+            ra_type_cast->expression = new Ra__Node__Expression();
+            parse_expression(type_cast->arg, ra_type_cast->expression, has_aggregate);
+            ra_expr->args.push_back(ra_type_cast);
+            break;
+        }
     }
 }
 
@@ -424,22 +441,28 @@ Ra__Node* parse_where_expression(PgQuery__Node* node, Ra__Node* sel, bool sublin
                 default: std::cout << "expr kind not supported" << std::endl;
             }
 
-            if(a_expr->lexpr->node_case == PG_QUERY__NODE__NODE_SUB_LINK){
-                PgQuery__SubLink* sub_link = a_expr->lexpr->sub_link;
-                add_subtree(sel, parse_subquery(sub_link, ra_l_expr));
-            }
-            else{
-                bool dummy_has_aggregate; // has_aggregate used by parse_select to detect implicit group by
-                parse_expression(a_expr->lexpr, ra_l_expr, dummy_has_aggregate);
+            switch(a_expr->lexpr->node_case){
+                case PG_QUERY__NODE__NODE_SUB_LINK:{
+                    PgQuery__SubLink* sub_link = a_expr->lexpr->sub_link;
+                    add_subtree(sel, parse_subquery(sub_link, ra_l_expr));
+                    break;
+                }
+                default:{
+                    bool dummy_has_aggregate; // has_aggregate used by parse_select to detect implicit group by
+                    parse_expression(a_expr->lexpr, ra_l_expr, dummy_has_aggregate);
+                }
             }
 
-            if(a_expr->rexpr->node_case == PG_QUERY__NODE__NODE_SUB_LINK){
-                PgQuery__SubLink* sub_link = a_expr->rexpr->sub_link;
-                add_subtree(sel, parse_subquery(sub_link, ra_r_expr));
-            }
-            else{
-                bool dummy_has_aggregate; // has_aggregate used by parse_select to detect implicit group by
-                parse_expression(a_expr->rexpr, ra_r_expr, dummy_has_aggregate);
+            switch(a_expr->rexpr->node_case){
+                case PG_QUERY__NODE__NODE_SUB_LINK:{
+                    PgQuery__SubLink* sub_link = a_expr->rexpr->sub_link;
+                    add_subtree(sel, parse_subquery(sub_link, ra_r_expr));
+                    break;
+                }
+                default:{
+                    bool dummy_has_aggregate; // has_aggregate used by parse_select to detect implicit group by
+                    parse_expression(a_expr->rexpr, ra_r_expr, dummy_has_aggregate);
+                }
             }
             
             p->left = ra_l_expr;
