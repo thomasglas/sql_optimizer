@@ -6,6 +6,8 @@
 
 #include "deparse_ra_to_sql.h"
 
+std::string deparse_expressions(std::vector<Ra__Node__Expression*>& expressions);
+
 std::string deparse_expression(Ra__Node__Expression* expression){
     std::string result = "";
     assert(expression->args.size()>0);
@@ -28,7 +30,7 @@ std::string deparse_expression(Ra__Node__Expression* expression){
             }
             case RA__NODE__FUNC_CALL: {
                 Ra__Node__Func_Call* func_call = static_cast<Ra__Node__Func_Call*>(expression->args[i]);
-                result += func_call->func_name + "(" + deparse_expression(func_call->expression) + ")";
+                result += func_call->func_name + "(" + deparse_expressions(func_call->args) + ")";
                 break;
             }
             case RA__NODE__DUMMY: break; //e.g. (dummy)-name
@@ -44,7 +46,7 @@ std::string deparse_expression(Ra__Node__Expression* expression){
     return result;
 }
 
-std::string deparse_order_by_expressions(std::vector<Ra__Node__Expression*>& expressions, std::vector<Ra__Order_By_Direction>& directions){
+std::string deparse_order_by_expressions(std::vector<Ra__Node__Expression*>& expressions, std::vector<Ra__Order_By__SortDirection>& directions){
     std::string result = "";
     assert(expressions.size()==directions.size());
     size_t n = expressions.size();
@@ -52,8 +54,8 @@ std::string deparse_order_by_expressions(std::vector<Ra__Node__Expression*>& exp
     for(size_t i=0; i<n; i++){
         std::string direction;
         switch(directions[i]){
-            case RA__ORDER_BY_ASC: direction = "asc"; break;
-            case RA__ORDER_BY_DESC: direction = "desc"; break;
+            case RA__ORDER_BY__ASC: direction = "asc"; break;
+            case RA__ORDER_BY__DESC: direction = "desc"; break;
             default: std::cout << "deparse order by order error" << std::endl; direction = "";
         }
         result += deparse_expression(expressions[i]) + " " + direction + ", ";
@@ -184,7 +186,9 @@ void ra_tree_dfs(Ra__Node* node, size_t layer,
         }
         case RA__NODE__GROUP_BY: {
             Ra__Node__Group_By* gb = static_cast<Ra__Node__Group_By*>(node);
-            group_by += deparse_expressions(gb->args);
+            if(!gb->implicit){
+                group_by += deparse_expressions(gb->args);
+            }
             ra_tree_dfs(gb->childNodes[0], layer, select, where, from, group_by, having, order_by);
             break;
         }

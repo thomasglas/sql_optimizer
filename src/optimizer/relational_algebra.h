@@ -37,7 +37,7 @@ typedef enum {
     RA__BOOL_OPERATOR__AND = 0,
     RA__BOOL_OPERATOR__OR = 1,
     RA__BOOL_OPERATOR__NOT = 2
-} Ra__Boolean_Operator__OperatorCase;
+} Ra__Bool_Operator__OperatorCase;
 
 typedef enum {
     RA__BINARY_OPERATOR__EQ = 0,
@@ -46,28 +46,40 @@ typedef enum {
     RA__BINARY_OPERATOR__LESS = 3,
     RA__BINARY_OPERATOR__GREATER_EQ = 4,
     RA__BINARY_OPERATOR__LESS_EQ = 5
-} Ra__Binary_Operator;
+} Ra__Binary_Operator__OperatorCase;
 
 typedef enum {
     RA__CONST_DATATYPE__INT = 0,
     RA__CONST_DATATYPE__FLOAT = 1,
     RA__CONST_DATATYPE__STRING = 2,
-} Ra__Const_DataType;
-
-typedef enum {
-    RA__JOIN_ORIENTATION_LEFT = 0,
-    RA__JOIN_ORIENTATION_RIGHT = 1
-} Ra__Join_Orientation;
+} Ra__Const_DataType__DataType;
 
 typedef enum {
     RA__JOIN__INNER = 0,
-    RA__JOIN__DEPENDENT_INNER = 1,
-} Ra__Join_Type;
+    RA__JOIN__DEPENDENT_INNER_LEFT = 1,
+    RA__JOIN__DEPENDENT_INNER_RIGHT = 2,
+    RA__JOIN__SEMI_LEFT = 3,
+    RA__JOIN__SEMI_RIGHT = 4,
+    RA__JOIN__SEMI_LEFT_DEPENDENT = 5,
+    RA__JOIN__SEMI_RIGHT_DEPENDENT = 6,
+    RA__JOIN__ANTI_LEFT = 7,
+    RA__JOIN__ANTI_RIGHT = 8,
+    RA__JOIN__ANTI_LEFT_DEPENDENT = 9,
+    RA__JOIN__ANTI_RIGHT_DEPENDENT = 10,
+} Ra__Join__JoinType;
 
 typedef enum {
-    RA__ORDER_BY_ASC = 0,
-    RA__ORDER_BY_DESC = 1,
-} Ra__Order_By_Direction;
+    RA__ORDER_BY__ASC = 0,
+    RA__ORDER_BY__DESC = 1,
+} Ra__Order_By__SortDirection;
+
+typedef enum {
+    RA__FUNC_CALL__MIN = 0,
+    RA__FUNC_CALL__MAX = 2,
+    RA__FUNC_CALL__SUM = 3,
+    RA__FUNC_CALL__COUNT = 4,
+    RA__FUNC_CALL__AVG = 5,
+} Ra__Func_Call__Func;
 
 class Ra__Node;
 class Ra__Node__Cross_Product;
@@ -111,7 +123,9 @@ class Ra__Node__Cross_Product: public Ra__Node{
 
 class Ra__Node__Join: public Ra__Node{
     public:
-        Ra__Node__Join(){
+        Ra__Node__Join(Ra__Join__JoinType _type)
+        : type(_type)
+        {
             node_case = Ra__Node__NodeCase::RA__NODE__JOIN;
             n_children = 2;
         }
@@ -119,13 +133,21 @@ class Ra__Node__Join: public Ra__Node{
             assert(childNodes.size()==2);
             std::string op;
             switch(type){
-                case RA__JOIN__DEPENDENT_INNER: op = "DJ"; break;
+                case RA__JOIN__DEPENDENT_INNER_LEFT: op = "LDJ"; break;
+                case RA__JOIN__DEPENDENT_INNER_RIGHT: op = "RDJ"; break;
+                case RA__JOIN__SEMI_LEFT: op = "SLJ"; break;
+                case RA__JOIN__SEMI_RIGHT: op = "SRJ"; break;
+                case RA__JOIN__SEMI_LEFT_DEPENDENT: op = "SLDJ"; break;
+                case RA__JOIN__SEMI_RIGHT_DEPENDENT: op = "SRDJ"; break;
+                case RA__JOIN__ANTI_LEFT: op = "ALJ"; break;
+                case RA__JOIN__ANTI_RIGHT: op = "ARJ"; break;
+                case RA__JOIN__ANTI_LEFT_DEPENDENT: op = "ALDJ"; break;
+                case RA__JOIN__ANTI_RIGHT_DEPENDENT: op = "ARDJ"; break;
             }
             return "(" + childNodes[0]->to_string() + ")"+op+"(" + childNodes[1]->to_string() + ")";
         }
         Ra__Node* predicate; // Ra__Node__Bool_Predicate/Ra__Node__Predicate
-        Ra__Join_Type type;
-        Ra__Join_Orientation orientation;
+        Ra__Join__JoinType type;
 };
 
 class Ra__Node__Projection: public Ra__Node {
@@ -138,7 +160,7 @@ class Ra__Node__Projection: public Ra__Node {
         }
         std::string to_string(){
             assert(childNodes.size()==1);
-            return "TT(" + childNodes[0]->to_string() + ")";
+            return "\u03A0(" + childNodes[0]->to_string() + ")";
         }
         std::vector<Ra__Node__Expression*> args; //expression/case
         std::string subquery_alias;
@@ -155,7 +177,7 @@ class Ra__Node__Selection: public Ra__Node {
         Ra__Node* predicate; // Ra__Node__Bool_Predicate/Ra__Node__Predicate
         std::string to_string(){
             assert(childNodes.size()==1);
-            return "o(" + childNodes[0]->to_string() + ")";
+            return "\u03C3(" + childNodes[0]->to_string() + ")";
         }
 };
 
@@ -181,7 +203,7 @@ class Ra__Node__Order_By: public Ra__Node {
             n_children = 1;
         }
         std::vector<Ra__Node__Expression*> args; // expressions/attr/const/case
-        std::vector<Ra__Order_By_Direction> directions;
+        std::vector<Ra__Order_By__SortDirection> directions;
         std::string to_string(){
             assert(childNodes.size()==1);
             return "OB(" + childNodes[0]->to_string() + ")";
@@ -190,14 +212,16 @@ class Ra__Node__Order_By: public Ra__Node {
 
 class Ra__Node__Group_By: public Ra__Node {
     public:
-        Ra__Node__Group_By(){
+        Ra__Node__Group_By(bool _implicit)
+        :implicit(_implicit){
             node_case = Ra__Node__NodeCase::RA__NODE__GROUP_BY;
             n_children = 1;
         }
         std::vector<Ra__Node__Expression*> args; // expressions/attr/const/case
+        bool implicit;
         std::string to_string(){
             assert(childNodes.size()==1);
-            return "GB(" + childNodes[0]->to_string() + ")";
+            return "\u0393(" + childNodes[0]->to_string() + ")";
         }
 };
 
@@ -221,7 +245,7 @@ class Ra__Node__Bool_Predicate: public Ra__Node {
             n_children = 0;
         }
         std::vector<Ra__Node*> args;
-        Ra__Boolean_Operator__OperatorCase bool_operator;
+        Ra__Bool_Operator__OperatorCase bool_operator;
 };
 
 class Ra__Node__Predicate: public Ra__Node {
@@ -275,7 +299,7 @@ class Ra__Node__Constant: public Ra__Node  {
         int i; // integer
         std::string f; // float
         std::string str;
-        Ra__Const_DataType dataType;
+        Ra__Const_DataType__DataType dataType;
 };
 
 class Ra__Node__Func_Call: public Ra__Node {
@@ -284,8 +308,9 @@ class Ra__Node__Func_Call: public Ra__Node {
             node_case = Ra__Node__NodeCase::RA__NODE__FUNC_CALL;
             n_children = 0;
         }
-    Ra__Node__Expression* expression;
+    std::vector<Ra__Node__Expression*> args;
     std::string func_name;
+    bool is_aggregating;
 };
 
 class Ra__Node__Dummy: public Ra__Node {
