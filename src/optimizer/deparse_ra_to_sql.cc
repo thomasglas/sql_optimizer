@@ -3,54 +3,103 @@
 #include <iostream>
 #include <map>
 #include <cassert>
+#include <algorithm>
 
 #include "deparse_ra_to_sql.h"
 
-std::string deparse_expressions(std::vector<Ra__Node__Expression*>& expressions);
+std::string deparse_expressions(std::vector<Ra__Node*>& expressions);
+std::string deparse_predicate(Ra__Node* node);
 
-std::string deparse_expression(Ra__Node__Expression* expression){
+std::string deparse_expression(Ra__Node* arg){
     std::string result = "";
-    assert(expression->args.size()>0);
 
-    size_t i = 0;
-    do{
-        if(i>0){
-            result += expression->operators[i-1];
+    switch(arg->node_case){
+        case RA__NODE__CONST: {
+            auto constant = static_cast<Ra__Node__Constant*>(arg);
+            result += constant->to_string();
+            break;
         }
-        switch(expression->args[i]->node_case){
-            case RA__NODE__CONST: {
-                Ra__Node__Constant* constant = static_cast<Ra__Node__Constant*>(expression->args[i]);
-                result += constant->to_string();
-                break;
+        case RA__NODE__ATTRIBUTE: {
+            auto attr = static_cast<Ra__Node__Attribute*>(arg);
+            result += attr->to_string();
+            break;
+        }
+        case RA__NODE__FUNC_CALL: {
+            auto func_call = static_cast<Ra__Node__Func_Call*>(arg);
+            if(func_call->func_name=="substring"){
+                switch(func_call->args.size()){
+                    case 1: result += func_call->func_name + "(" + deparse_expression(func_call->args[0]) + ")"; break;
+                    case 2: result += func_call->func_name + "(" + deparse_expression(func_call->args[0]) + " from " + deparse_expression(func_call->args[1]) + ")"; break;
+                    case 3: result += func_call->func_name + "(" + deparse_expression(func_call->args[0]) + " from " + deparse_expression(func_call->args[1]) + " for " + deparse_expression(func_call->args[2]) + ")"; break;
+                    default: std::cout << "too many args in substring func call" << std::endl;
+                };
             }
-            case RA__NODE__ATTRIBUTE: {
-                Ra__Node__Attribute* attr = static_cast<Ra__Node__Attribute*>(expression->args[i]);
-                result += attr->to_string();
-                break;
+            else if(func_call->func_name=="extract"){
+                assert(func_call->args.size()==2);
+                std::string date_part = deparse_expression(func_call->args[0]);
+                date_part.erase(std::remove(date_part.begin(), date_part.end(), '\''), date_part.end());
+                result += func_call->func_name + "(" + date_part + " from " + deparse_expression(func_call->args[1]) + ")"; break;
             }
-            case RA__NODE__FUNC_CALL: {
-                Ra__Node__Func_Call* func_call = static_cast<Ra__Node__Func_Call*>(expression->args[i]);
+            else if(func_call->is_aggregating && func_call->agg_distinct){
+                result += func_call->func_name + "(distinct " + deparse_expressions(func_call->args) + ")";
+            }
+            else{
                 result += func_call->func_name + "(" + deparse_expressions(func_call->args) + ")";
-                break;
             }
-            case RA__NODE__TYPE_CAST: {
-                Ra__Node__Type_Cast* type_cast = static_cast<Ra__Node__Type_Cast*>(expression->args[i]);
-                result += type_cast->type + deparse_expression(type_cast->expression) + type_cast->typ_mod;
-            }
-            case RA__NODE__DUMMY: break; //e.g. (dummy)-name
-            default: std::cout << "error deparse select" << std::endl;
+            break;
         }
-        i++;
-    }while(i<expression->args.size());
-    
-    if(expression->rename.size()>0){
-        result += " as " + expression->rename;
+        case RA__NODE__TYPE_CAST: {
+            auto type_cast = static_cast<Ra__Node__Type_Cast*>(arg);
+            result += type_cast->type + " " + deparse_expression(type_cast->expression) + " " + type_cast->typ_mod;
+            break;
+        }
+        case RA__NODE__SELECT_EXPRESSION:{
+            auto sel_expr = static_cast<Ra__Node__Select_Expression*>(arg);
+            result += deparse_expression(sel_expr->expression);
+            if(sel_expr->rename.size()>0){
+                result += " as " + sel_expr->rename;
+            }
+            break;
+        }
+        case RA__NODE__EXPRESSION:{
+            auto expr = static_cast<Ra__Node__Expression*>(arg);
+            result += "(";
+            if(expr->l_arg!=nullptr){
+                result += deparse_expression(expr->l_arg);
+            }
+            result += expr->operator_;
+            if(expr->r_arg!=nullptr){
+                result += deparse_expression(expr->r_arg);
+            }
+            result += ")";
+            break;
+        }
+        case RA__NODE__LIST:{
+            auto list = static_cast<Ra__Node__List*>(arg);
+            for(size_t i=0;i<list->args.size();i++){
+                result += i<list->args.size()-1 ? deparse_expression(list->args[i])+" and " : deparse_expression(list->args[i]);
+            }
+            break;
+        }
+        case RA__NODE__CASE_EXPR:{
+            auto case_expr = static_cast<Ra__Node__Case_Expr*>(arg);
+            result += "case";
+            for(auto& arg: case_expr->args){
+                result += " when " + deparse_predicate(arg->when) + " then " + deparse_expression(arg->then);
+            }
+            if(case_expr->else_default!=nullptr){
+                result += " else " + deparse_expression(case_expr->else_default);
+            }
+            result += " end";
+        }
+        case RA__NODE__DUMMY: break; //e.g. (dummy)-name
+        default: std::cout << "error deparse select" << std::endl;
     }
 
     return result;
 }
 
-std::string deparse_order_by_expressions(std::vector<Ra__Node__Expression*>& expressions, std::vector<Ra__Order_By__SortDirection>& directions){
+std::string deparse_order_by_expressions(std::vector<Ra__Node*>& expressions, std::vector<Ra__Order_By__SortDirection>& directions){
     std::string result = "";
     assert(expressions.size()==directions.size());
     size_t n = expressions.size();
@@ -58,18 +107,19 @@ std::string deparse_order_by_expressions(std::vector<Ra__Node__Expression*>& exp
     for(size_t i=0; i<n; i++){
         std::string direction;
         switch(directions[i]){
-            case RA__ORDER_BY__ASC: direction = "asc"; break;
-            case RA__ORDER_BY__DESC: direction = "desc"; break;
+            case RA__ORDER_BY__DEFAULT: direction = ""; break;
+            case RA__ORDER_BY__ASC: direction = " asc"; break;
+            case RA__ORDER_BY__DESC: direction = " desc"; break;
             default: std::cout << "deparse order by order error" << std::endl; direction = "";
         }
-        result += deparse_expression(expressions[i]) + " " + direction + ", ";
+        result += deparse_expression(expressions[i]) + direction + ", ";
     }
     result.pop_back();
     result.pop_back();
     return result;
 }
 
-std::string deparse_expressions(std::vector<Ra__Node__Expression*>& expressions){
+std::string deparse_expressions(std::vector<Ra__Node*>& expressions){
     std::string result = "";
 
     for(auto expression: expressions){
@@ -136,13 +186,9 @@ std::string deparse_predicate(Ra__Node* node){
             Ra__Node__Predicate* p = static_cast<Ra__Node__Predicate*>(node);
             return deparse_predicate(p->left) + p->binaryOperator + deparse_predicate(p->right);
         }
-        case RA__NODE__EXPRESSION: {
+        default: {
             Ra__Node__Expression* expression = static_cast<Ra__Node__Expression*>(node);
             return deparse_expression(expression);
-        }
-        default: {
-            std::cout << "error deparse predicate" << std::endl;
-            return "deparse_error";
         }
     }
 }
@@ -152,7 +198,7 @@ std::string generate_where(Ra__Node* node){
     return deparse_predicate(sel->predicate);
 }
 
-std::string generate_from(Ra__Node* node){
+std::string generate_relation(Ra__Node* node){
     Ra__Node__Relation* relation = static_cast<Ra__Node__Relation*>(node);
     return relation->alias.length()>0 ? relation->name + " " + relation->alias : relation->name;
 }
@@ -179,12 +225,26 @@ void ra_tree_dfs(Ra__Node* node, size_t layer,
         case RA__NODE__PROJECTION: {
             Ra__Node__Projection* pr = static_cast<Ra__Node__Projection*>(node);
             if(layer==0){
-                select = "select " + deparse_expressions(pr->args) + ", ";
+                select = "select ";
+                if(pr->distinct){
+                    select += "distinct ";
+                }
+                select += deparse_expressions(pr->args) + ", ";
                 layer++;
                 ra_tree_dfs(node->childNodes[0], layer, select, where, from, group_by, having, order_by);
             }
             else{
-                from += "(" + deparse_ra(node) + ") as " + pr->subquery_alias + ", "; 
+                if(pr->subquery_columns.size()>0){
+                    std::string subquery_columns = "";
+                    for(auto& col_rename: pr->subquery_columns){
+                        subquery_columns += col_rename + ",";
+                    }
+                    subquery_columns.pop_back();
+                    from += "(" + deparse_ra(node) + ") as " + pr->subquery_alias + "(" + subquery_columns + ")" + ", ";
+                }
+                else{
+                    from += "(" + deparse_ra(node) + ") as " + pr->subquery_alias + ", "; 
+                }
             }
             break;
         }
@@ -214,7 +274,32 @@ void ra_tree_dfs(Ra__Node* node, size_t layer,
             break;
         }
         case RA__NODE__RELATION: {
-            from += generate_from(node) + ", ";
+            from += generate_relation(node) + ", ";
+            break;
+        }
+        case RA__NODE__JOIN: {
+            Ra__Node__Join* join = static_cast<Ra__Node__Join*>(node);
+            // switch case join type
+            assert(join->is_full());
+            if(join->predicate==nullptr){
+                from += "(" + generate_relation(join->childNodes[0]) + join->join_name() + generate_relation(join->childNodes[1]) + ")";
+            }
+            else{
+                from += "(" + generate_relation(join->childNodes[0]) + join->join_name() + generate_relation(join->childNodes[1]) + " on " + deparse_predicate(join->predicate) + ")";
+            }
+            if(join->alias.length()>0){
+                from += " as " + join->alias; 
+            } 
+            if(join->columns.size()>0){
+                std::string columns = "(";
+                for(auto& col: join->columns){
+                    columns += col + ",";
+                }
+                columns.pop_back();
+                columns += ")";
+                from += columns;
+            }
+            from += ", ";
             break;
         }
         default: {

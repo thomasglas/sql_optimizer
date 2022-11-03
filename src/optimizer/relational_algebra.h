@@ -5,6 +5,7 @@
 #include <vector>
 #include <string>
 #include <cassert>
+#include <iostream>
 
 typedef enum {
     RA__NODE__ROOT = 0,
@@ -24,7 +25,11 @@ typedef enum {
     RA__NODE__ORDER_BY = 14,
     RA__NODE__HAVING = 15,
     RA__NODE__JOIN = 16,
-    RA__NODE__TYPE_CAST = 17
+    RA__NODE__TYPE_CAST = 17,
+    RA__NODE__SELECT_EXPRESSION = 18,
+    RA__NODE__LIST = 19,
+    RA__NODE__CASE_EXPR = 20,
+    RA__NODE__CASE_WHEN = 21,
 } Ra__Node__NodeCase;
 
 typedef enum {
@@ -59,19 +64,22 @@ typedef enum {
     RA__JOIN__INNER = 0,
     RA__JOIN__DEPENDENT_INNER_LEFT = 1,
     RA__JOIN__DEPENDENT_INNER_RIGHT = 2,
-    RA__JOIN__SEMI_LEFT = 3,
-    RA__JOIN__SEMI_RIGHT = 4,
-    RA__JOIN__SEMI_LEFT_DEPENDENT = 5,
-    RA__JOIN__SEMI_RIGHT_DEPENDENT = 6,
-    RA__JOIN__ANTI_LEFT = 7,
-    RA__JOIN__ANTI_RIGHT = 8,
-    RA__JOIN__ANTI_LEFT_DEPENDENT = 9,
-    RA__JOIN__ANTI_RIGHT_DEPENDENT = 10,
+    RA__JOIN__LEFT = 3,
+    RA__JOIN__RIGHT = 4,
+    RA__JOIN__SEMI_LEFT = 5,
+    RA__JOIN__SEMI_RIGHT = 6,
+    RA__JOIN__SEMI_LEFT_DEPENDENT = 7,
+    RA__JOIN__SEMI_RIGHT_DEPENDENT = 8,
+    RA__JOIN__ANTI_LEFT = 9,
+    RA__JOIN__ANTI_RIGHT = 10,
+    RA__JOIN__ANTI_LEFT_DEPENDENT = 11,
+    RA__JOIN__ANTI_RIGHT_DEPENDENT = 12,
 } Ra__Join__JoinType;
 
 typedef enum {
-    RA__ORDER_BY__ASC = 0,
-    RA__ORDER_BY__DESC = 1,
+    RA__ORDER_BY__DEFAULT = 0,
+    RA__ORDER_BY__ASC = 1,
+    RA__ORDER_BY__DESC = 2,
 } Ra__Order_By__SortDirection;
 
 typedef enum {
@@ -100,6 +108,9 @@ class Ra__Node__Constant;
 class Ra__Node__Group_By;
 class Ra__Node__Order_By;
 class Ra__Node__Having;
+class Ra__Node__Select_Expression;
+class Ra__Node__Case_When;
+class Ra__Node__Case_Expr;
 
 class Ra__Node{
     public:
@@ -133,11 +144,15 @@ class Ra__Node__Join: public Ra__Node{
         {
             node_case = Ra__Node__NodeCase::RA__NODE__JOIN;
             n_children = 2;
+            predicate = nullptr;
         }
         std::string to_string(){
-            assert(childNodes.size()==2);
+            assert(this->is_full());
             std::string op;
             switch(type){
+                case RA__JOIN__INNER: op = "J"; break;
+                case RA__JOIN__LEFT: op = "LJ"; break;
+                case RA__JOIN__RIGHT: op = "RJ"; break;
                 case RA__JOIN__DEPENDENT_INNER_LEFT: op = "LDJ"; break;
                 case RA__JOIN__DEPENDENT_INNER_RIGHT: op = "RDJ"; break;
                 case RA__JOIN__SEMI_LEFT: op = "SLJ"; break;
@@ -148,11 +163,22 @@ class Ra__Node__Join: public Ra__Node{
                 case RA__JOIN__ANTI_RIGHT: op = "ARJ"; break;
                 case RA__JOIN__ANTI_LEFT_DEPENDENT: op = "ALDJ"; break;
                 case RA__JOIN__ANTI_RIGHT_DEPENDENT: op = "ARDJ"; break;
+                default: op = "join op not supported";
             }
             return "(" + childNodes[0]->to_string() + ")"+op+"(" + childNodes[1]->to_string() + ")";
         }
+        std::string join_name(){
+            switch(type){
+                case RA__JOIN__INNER: return " join ";
+                case RA__JOIN__LEFT: return " left join ";
+                case RA__JOIN__RIGHT: return " right join ";
+                default: return " join op not supported ";
+            }
+        }
         Ra__Node* predicate; // Ra__Node__Bool_Predicate/Ra__Node__Predicate
         Ra__Join__JoinType type;
+        std::string alias;
+        std::vector<std::string> columns;
 };
 
 class Ra__Node__Projection: public Ra__Node {
@@ -160,17 +186,16 @@ class Ra__Node__Projection: public Ra__Node {
         Ra__Node__Projection(){
             node_case = Ra__Node__NodeCase::RA__NODE__PROJECTION;
             n_children = 1;
-            has_group_by = false;
-            has_order_by = false;
+            distinct = false;
         }
         std::string to_string(){
             assert(childNodes.size()==1);
             return "\u03A0(" + childNodes[0]->to_string() + ")";
         }
-        std::vector<Ra__Node__Expression*> args; //expression/case
+        std::vector<Ra__Node*> args; // Ra__Node__Select_Expression
         std::string subquery_alias;
-        bool has_group_by;
-        bool has_order_by;
+        std::vector<std::string> subquery_columns;
+        bool distinct;
 };
 
 class Ra__Node__Selection: public Ra__Node {
@@ -194,6 +219,7 @@ class Ra__Node__Relation: public Ra__Node {
         }
         std::string name;
         std::string alias;
+        std::vector<Ra__Node__Attribute*> attributes;
         std::string to_string(){
             assert(childNodes.size()==0);
             return alias.length()==0 ? name : name + " " + alias;
@@ -207,7 +233,7 @@ class Ra__Node__Order_By: public Ra__Node {
             node_case = Ra__Node__NodeCase::RA__NODE__ORDER_BY;
             n_children = 1;
         }
-        std::vector<Ra__Node__Expression*> args; // expressions/attr/const/case
+        std::vector<Ra__Node*> args; // expressions/attr/const/case
         std::vector<Ra__Order_By__SortDirection> directions;
         std::string to_string(){
             assert(childNodes.size()==1);
@@ -222,7 +248,7 @@ class Ra__Node__Group_By: public Ra__Node {
             node_case = Ra__Node__NodeCase::RA__NODE__GROUP_BY;
             n_children = 1;
         }
-        std::vector<Ra__Node__Expression*> args; // expressions/attr/const/case
+        std::vector<Ra__Node*> args; // expressions/attr/const/case
         bool implicit;
         std::string to_string(){
             assert(childNodes.size()==1);
@@ -256,33 +282,59 @@ class Ra__Node__Bool_Predicate: public Ra__Node {
 class Ra__Node__Predicate: public Ra__Node {
     public:
         Ra__Node__Predicate();
-        Ra__Node__Expression* left;
-        Ra__Node__Expression* right;
+        Ra__Node* left;
+        Ra__Node* right;
         // Ra__Binary_Operator binaryOperator;
         std::string binaryOperator;
 };
 
+class Ra__Node__Select_Expression: public Ra__Node {
+    public:
+        Ra__Node__Select_Expression();
+        Ra__Node* expression;
+        std::string rename;
+};
+
+// Todo: change to left and right expression and operator (one expr can be nullptr)
 class Ra__Node__Expression: public Ra__Node {
     public:
         Ra__Node__Expression(){
             node_case = Ra__Node__NodeCase::RA__NODE__EXPRESSION;
             n_children = 0;
+            r_arg = nullptr;
+            l_arg = nullptr;
         }
-        std::vector<Ra__Node*> args; //const, attributes, func calls, type cast
-        std::vector<std::string> operators;
-        std::string rename;
+        void add_arg(Ra__Node* arg){
+            if(r_arg==nullptr) r_arg=arg;
+            else if(l_arg==nullptr) l_arg=arg;
+            else std::cout << "error in expression add arg, already full" << std::endl;
+        }
+        Ra__Node* r_arg;
+        Ra__Node* l_arg; //const, attributes, func calls, type cast
+        std::string operator_;
 };
+// class Ra__Node__Expression: public Ra__Node {
+//     public:
+//         Ra__Node__Expression(){
+//             node_case = Ra__Node__NodeCase::RA__NODE__EXPRESSION;
+//             n_children = 0;
+//         }
+//         std::vector<Ra__Node*> args; //const, attributes, func calls, type cast
+//         std::vector<std::string> operators;
+//         std::string rename;
+// };
 
 class Ra__Node__Type_Cast: public Ra__Node {
     public:
         Ra__Node__Type_Cast(){
             node_case = Ra__Node__NodeCase::RA__NODE__TYPE_CAST;
             n_children = 0;
+            expression = new Ra__Node__Expression();
         }
         std::string to_string(){
             return "";
         }
-        Ra__Node__Expression* expression;
+        Ra__Node* expression;
         std::string type;
         std::string typ_mod; // interval '2' month
 };
@@ -326,10 +378,43 @@ class Ra__Node__Func_Call: public Ra__Node {
         Ra__Node__Func_Call(){
             node_case = Ra__Node__NodeCase::RA__NODE__FUNC_CALL;
             n_children = 0;
+            is_aggregating = false;
+            agg_distinct = false;
         }
-    std::vector<Ra__Node__Expression*> args;
+    std::vector<Ra__Node*> args;
     std::string func_name;
     bool is_aggregating;
+    bool agg_distinct;
+};
+
+class Ra__Node__List: public Ra__Node {
+    public:
+        Ra__Node__List(){
+            node_case = Ra__Node__NodeCase::RA__NODE__LIST;
+            n_children = 0;
+        }
+    std::vector<Ra__Node*> args;
+};
+
+class Ra__Node__Case_Expr: public Ra__Node {
+    public:
+        Ra__Node__Case_Expr(){
+            node_case = Ra__Node__NodeCase::RA__NODE__CASE_EXPR;
+            n_children = 0;
+            else_default = nullptr;
+        }
+    std::vector<Ra__Node__Case_When*> args;
+    Ra__Node* else_default;
+};
+
+class Ra__Node__Case_When: public Ra__Node {
+    public:
+        Ra__Node__Case_When(){
+            node_case = Ra__Node__NodeCase::RA__NODE__CASE_WHEN;
+            n_children = 0;
+        }
+    Ra__Node* when; // predicate
+    Ra__Node* then; // expression
 };
 
 class Ra__Node__Dummy: public Ra__Node {
