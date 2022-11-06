@@ -7,10 +7,7 @@
 
 #include "deparse_ra_to_sql.h"
 
-std::string deparse_expressions(std::vector<Ra__Node*>& expressions);
-std::string deparse_predicate(Ra__Node* node);
-
-std::string deparse_expression(Ra__Node* arg){
+std::string RAtoSQL::deparse_expression(Ra__Node* arg){
     std::string result = "";
 
     switch(arg->node_case){
@@ -99,7 +96,7 @@ std::string deparse_expression(Ra__Node* arg){
     return result;
 }
 
-std::string deparse_order_by_expressions(std::vector<Ra__Node*>& expressions, std::vector<Ra__Order_By__SortDirection>& directions){
+std::string RAtoSQL::deparse_order_by_expressions(std::vector<Ra__Node*>& expressions, std::vector<Ra__Order_By__SortDirection>& directions){
     std::string result = "";
     assert(expressions.size()==directions.size());
     size_t n = expressions.size();
@@ -119,7 +116,7 @@ std::string deparse_order_by_expressions(std::vector<Ra__Node*>& expressions, st
     return result;
 }
 
-std::string deparse_expressions(std::vector<Ra__Node*>& expressions){
+std::string RAtoSQL::deparse_expressions(std::vector<Ra__Node*>& expressions){
     std::string result = "";
 
     for(auto expression: expressions){
@@ -130,7 +127,7 @@ std::string deparse_expressions(std::vector<Ra__Node*>& expressions){
     return result;
 }
 
-std::string deparse_predicate(Ra__Node* node){
+std::string RAtoSQL::deparse_predicate(Ra__Node* node){
     switch(node->node_case){
         case RA__NODE__BOOL_PREDICATE: {
             std::string result = "";
@@ -193,17 +190,17 @@ std::string deparse_predicate(Ra__Node* node){
     }
 }
 
-std::string generate_where(Ra__Node* node){
+std::string RAtoSQL::deparse_selection(Ra__Node* node){
     Ra__Node__Selection* sel = static_cast<Ra__Node__Selection*>(node);
     return deparse_predicate(sel->predicate);
 }
 
-std::string generate_relation(Ra__Node* node){
+std::string RAtoSQL::deparse_relation(Ra__Node* node){
     Ra__Node__Relation* relation = static_cast<Ra__Node__Relation*>(node);
     return relation->alias.length()>0 ? relation->name + " " + relation->alias : relation->name;
 }
 
-void ra_tree_dfs(Ra__Node* node, size_t layer, 
+void RAtoSQL::deparse_ra_node(Ra__Node* node, size_t layer, 
     std::string& select, 
     std::string& where, 
     std::string& from,
@@ -214,12 +211,12 @@ void ra_tree_dfs(Ra__Node* node, size_t layer,
     assert(node->is_full());
     switch(node->node_case){
         case RA__NODE__ROOT: {
-            ra_tree_dfs(node->childNodes[0], layer, select, where, from, group_by, having, order_by);
+            deparse_ra_node(node->childNodes[0], layer, select, where, from, group_by, having, order_by);
             break;
         }
         case RA__NODE__SELECTION: {
-            where += generate_where(node);
-            ra_tree_dfs(node->childNodes[0], layer, select, where, from, group_by, having, order_by);
+            where += deparse_selection(node);
+            deparse_ra_node(node->childNodes[0], layer, select, where, from, group_by, having, order_by);
             break;
         }
         case RA__NODE__PROJECTION: {
@@ -231,7 +228,7 @@ void ra_tree_dfs(Ra__Node* node, size_t layer,
                 }
                 select += deparse_expressions(pr->args) + ", ";
                 layer++;
-                ra_tree_dfs(node->childNodes[0], layer, select, where, from, group_by, having, order_by);
+                deparse_ra_node(node->childNodes[0], layer, select, where, from, group_by, having, order_by);
             }
             else{
                 if(pr->subquery_columns.size()>0){
@@ -240,10 +237,10 @@ void ra_tree_dfs(Ra__Node* node, size_t layer,
                         subquery_columns += col_rename + ",";
                     }
                     subquery_columns.pop_back();
-                    from += "(" + deparse_ra(node) + ") as " + pr->subquery_alias + "(" + subquery_columns + ")" + ", ";
+                    from += "(" + deparse_ra_tree(node) + ") as " + pr->subquery_alias + "(" + subquery_columns + ")" + ", ";
                 }
                 else{
-                    from += "(" + deparse_ra(node) + ") as " + pr->subquery_alias + ", "; 
+                    from += "(" + deparse_ra_tree(node) + ") as " + pr->subquery_alias + ", "; 
                 }
             }
             break;
@@ -253,28 +250,28 @@ void ra_tree_dfs(Ra__Node* node, size_t layer,
             if(!gb->implicit){
                 group_by += deparse_expressions(gb->args);
             }
-            ra_tree_dfs(gb->childNodes[0], layer, select, where, from, group_by, having, order_by);
+            deparse_ra_node(gb->childNodes[0], layer, select, where, from, group_by, having, order_by);
             break;
         }
         case RA__NODE__ORDER_BY: {
             Ra__Node__Order_By* ob = static_cast<Ra__Node__Order_By*>(node);
             order_by += deparse_order_by_expressions(ob->args, ob->directions);
-            ra_tree_dfs(ob->childNodes[0], layer, select, where, from, group_by, having, order_by);
+            deparse_ra_node(ob->childNodes[0], layer, select, where, from, group_by, having, order_by);
             break;
         }
         case RA__NODE__HAVING: {
             Ra__Node__Having* ha = static_cast<Ra__Node__Having*>(node);
             having += deparse_predicate(ha->predicate);
-            ra_tree_dfs(ha->childNodes[0], layer, select, where, from, group_by, having, order_by);
+            deparse_ra_node(ha->childNodes[0], layer, select, where, from, group_by, having, order_by);
             break;
         }
         case RA__NODE__CROSS_PRODUCT: {
-            ra_tree_dfs(node->childNodes[0], layer, select, where, from, group_by, having, order_by);
-            ra_tree_dfs(node->childNodes[1], layer, select, where, from, group_by, having, order_by);
+            deparse_ra_node(node->childNodes[0], layer, select, where, from, group_by, having, order_by);
+            deparse_ra_node(node->childNodes[1], layer, select, where, from, group_by, having, order_by);
             break;
         }
         case RA__NODE__RELATION: {
-            from += generate_relation(node) + ", ";
+            from += deparse_relation(node) + ", ";
             break;
         }
         case RA__NODE__JOIN: {
@@ -282,10 +279,10 @@ void ra_tree_dfs(Ra__Node* node, size_t layer,
             // switch case join type
             assert(join->is_full());
             if(join->predicate==nullptr){
-                from += "(" + generate_relation(join->childNodes[0]) + join->join_name() + generate_relation(join->childNodes[1]) + ")";
+                from += "(" + deparse_relation(join->childNodes[0]) + join->join_name() + deparse_relation(join->childNodes[1]) + ")";
             }
             else{
-                from += "(" + generate_relation(join->childNodes[0]) + join->join_name() + generate_relation(join->childNodes[1]) + " on " + deparse_predicate(join->predicate) + ")";
+                from += "(" + deparse_relation(join->childNodes[0]) + join->join_name() + deparse_relation(join->childNodes[1]) + " on " + deparse_predicate(join->predicate) + ")";
             }
             if(join->alias.length()>0){
                 from += " as " + join->alias; 
@@ -309,7 +306,7 @@ void ra_tree_dfs(Ra__Node* node, size_t layer,
     }
 }
 
-std::string deparse_ra(Ra__Node* ra_root){
+std::string RAtoSQL::deparse_ra_tree(Ra__Node* ra_root){
 
     std::string select = "";
     std::string from = "";
@@ -318,7 +315,7 @@ std::string deparse_ra(Ra__Node* ra_root){
     std::string having = "";
     std::string order_by = "";
 
-    ra_tree_dfs(ra_root, 0, select, where, from, group_by, having, order_by);
+    deparse_ra_node(ra_root, 0, select, where, from, group_by, having, order_by);
 
     if(select.length()==0){
         select = "*";

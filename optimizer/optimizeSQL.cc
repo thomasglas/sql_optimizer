@@ -12,38 +12,36 @@
 #include "optimizer/parse_sql_to_ra.h"
 #include "optimizer/deparse_ra_to_sql.h"
 
-size_t testCount = 1;
 std::vector<const char*> tests = {
-  // "SELECT s.name, s.id from students s, exams e where s.id=1 and s.name='Thomas' or not s.avg>2.0",
-  // "SELECT s.id from students s where 1=1",
-  // "SELECT s.id as foo from students s",
-  // "SELECT * from students",
-  // "SELECT e.grade from exams e, students s where e.sid=s.id",
-  // "SELECT 5, 5.0, 'Thomas'" ,
-  // "SELECT s.id+5-2 from students s where s.id-4<>1",
-  // "SELECT max(s.id, foo), min(s.id+4), max(s.id)+4 from students s",
-  // "select s.name from students s where s.id = (select min(s2.id) from students s2 where s2.id>1)", 
-  // "select * from students where a=1 and (b=2 or c=3)",
-  // "select grade from exams group by sid, name having sid=1",
-  // "select sid from exams order by grade asc, semester desc",
-  // "select -id from students",
-  // "select name from students having sid=2",
-  // "select name from students group by name having min(id)>2",
-  // "select name from students where name like '%glas'",
-  // "select name from students where name not like '%glas'",
-  // "select * from students, profs, exams, lectures",
-  // "select * from students where year = date '1999'",
-  // "select * from students where year < date '1999' + interval '3' day",
-  // "select substring(name from 1 for 2) from students",
-  // "select (1-id)*5 as foo from students",
-  // "select id from students where id between min(id) and 5",
-  // "select case when id='Thomas' then 'cool' else 'awesome' end as foo from students",
-  // "select distinct id from students",
-  // "select count(distinct id) from students",
-  // "select extract(year from _date) from students",
-  // "select s2.sid from (select s.id, s.name from students s) as s2(sid,firstname)",
-  // "select * from (students s left outer join professors p on s.id=p.id) as s2(col1, col2)",
-  // // "select * from students where exists (select 1)", // semi join can't be deparsed, yet
+  "SELECT s.name, s.id from students s, exams e where s.id=1 and s.name='Thomas' or not s.avg>2.0",
+  "SELECT s.id from students s where 1=1",
+  "SELECT s.id as foo from students s",
+  "SELECT * from students",
+  "SELECT e.grade from exams e, students s where e.sid=s.id",
+  "SELECT 5, 5.0, 'Thomas'" ,
+  "SELECT s.id+5-2 from students s where s.id-4<>1",
+  "SELECT max(s.id, foo), min(s.id+4), max(s.id)+4 from students s",
+  "select s.name from students s where s.id = (select min(s2.id) from students s2 where s2.id>1)", 
+  "select * from students where a=1 and (b=2 or c=3)",
+  "select grade from exams group by sid, name having sid=1",
+  "select sid from exams order by grade asc, semester desc",
+  "select -id from students",
+  "select name from students having sid=2",
+  "select name from students group by name having min(id)>2",
+  "select name from students where name like '%glas'",
+  "select name from students where name not like '%glas'",
+  "select * from students, profs, exams, lectures",
+  "select * from students where year = date '1999'",
+  "select * from students where year < date '1999' + interval '3' day",
+  "select substring(name from 1 for 2) from students",
+  "select (1-id)*5 as foo from students",
+  "select id from students where id between min(id) and 5",
+  "select case when id='Thomas' then 'cool' else 'awesome' end as foo from students",
+  "select distinct id from students",
+  "select count(distinct id) from students",
+  "select extract(year from _date) from students",
+  "select s2.sid from (select s.id, s.name from students s) as s2(sid,firstname)",
+  "select * from (students s left outer join professors p on s.id=p.id) as s2(col1, col2)",
   "with foo(a,b) as (select a,b from students) select * from foo",
 };
 
@@ -88,17 +86,16 @@ std::vector<const char*> tpch_uncorrelated = {
   // /*Q14*/ "select 100.00 * sum(case when p_type like 'PROMO%' then l_extendedprice * (1 - l_discount) else 0 end) / sum(l_extendedprice * (1 - l_discount)) as promo_revenue from lineitem, part where l_partkey = p_partkey and l_shipdate >= date '1995-09-01' and l_shipdate < date '1995-09-01' + interval '1' month",
   // Q15 cte code replacement
   /*Q15*/ "with revenue (supplier_no, total_revenue) as ( select l_suppkey, sum(l_extendedprice * (1 - l_discount)) from lineitem where l_shipdate >= date '1996-01-01' and l_shipdate < date '1996-01-01' + interval '3' month group by l_suppkey) select s_suppkey, s_name, s_address, s_phone, total_revenue from supplier, revenue where s_suppkey = supplier_no and total_revenue = ( select max(total_revenue) from revenue ) order by s_suppkey",
-  /*Q16*/ "",
-  /*Q18*/ "",
-  /*Q19*/ "",
+  // /*Q16*/ "",
+  // /*Q18*/ "",
+  // /*Q19*/ "",
 };
 
 void parse_json(){
 
   PgQueryParseResult result;
-  size_t i;
 
-  for (i = 0; i < testCount; i++) {
+  for (size_t i = 0; i < tests.size(); i++) {
     result = pg_query_parse(tests[i]);
 
     if (result.error) {
@@ -113,9 +110,11 @@ void parse_json(){
 void run_tests(){
   std::cout << "\n===== tests =====" << std::endl;
   for(auto test: tests){
-    Ra__Node* ra_root = parse_sql_query(test);
+    SQLtoRA sql_to_ra;
+    Ra__Node* ra_root = sql_to_ra.parse(test);
     std::cout << ra_root->to_string() <<std::endl;
-    std::string sql = deparse_ra(ra_root);
+    RAtoSQL ra_to_sql;
+    std::string sql = ra_to_sql.deparse_ra_tree(ra_root);
     std::cout << sql << std::endl;
   }
 }
@@ -123,7 +122,8 @@ void run_tests(){
 void run_tests_correlated(){
   std::cout << "\n===== correlated tests =====" << std::endl;
   for(auto test: tests_correlated){
-    Ra__Node* ra_root = parse_sql_query(test);
+    SQLtoRA sql_to_ra;
+    Ra__Node* ra_root = sql_to_ra.parse(test);
     std::cout << ra_root->to_string() << "\n" << std::endl;
   }
 }
@@ -131,7 +131,8 @@ void run_tests_correlated(){
 void run_q1q2(){
   std::cout << "\n===== Q1Q2 tests =====" << std::endl;
   for(auto test: Q1Q2){
-    Ra__Node* ra_root = parse_sql_query(test);
+    SQLtoRA sql_to_ra;
+    Ra__Node* ra_root = sql_to_ra.parse(test);
     std::cout << ra_root->to_string() << "\n" << std::endl;
   }
 }
@@ -139,7 +140,8 @@ void run_q1q2(){
 void run_tpch(){
   std::cout << "\n===== TPCH tests =====" << std::endl;
   for(auto test: tpch_correlated){
-    Ra__Node* ra_root = parse_sql_query(test);
+    SQLtoRA sql_to_ra;
+    Ra__Node* ra_root = sql_to_ra.parse(test);
     std::cout << ra_root->to_string() << "\n" << std::endl;
   }
 }
@@ -147,9 +149,11 @@ void run_tpch(){
 void run_tpch_uncorrelated(){
   std::cout << "\n===== TPCH tests =====" << std::endl;
   for(auto test: tpch_uncorrelated){
-    Ra__Node* ra_root = parse_sql_query(test);
+    SQLtoRA sql_to_ra;
+    Ra__Node* ra_root = sql_to_ra.parse(test);
     std::cout << ra_root->to_string() << "\n" << std::endl;
-    std::string sql = deparse_ra(ra_root);
+    RAtoSQL ra_to_sql;
+    std::string sql = ra_to_sql.deparse_ra_tree(ra_root);
     std::cout << sql << std::endl;
   }
 }
@@ -164,7 +168,7 @@ void deparse_protobuf(const char* test){
 }
 
 int main() {
-  // run_tests();
+  run_tests();
   // run_tests_correlated();
   // run_q1q2();
   // run_tpch();
