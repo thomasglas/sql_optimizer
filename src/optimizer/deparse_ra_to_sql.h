@@ -3,18 +3,40 @@
 
 #include <string>
 #include "relational_algebra.h"
+#include "ra_tree.h"
 
 class RAtoSQL{
-    public:   
+    public:
+        RAtoSQL(RaTree* _raTree);
+        ~RAtoSQL();
+
         /**
          * Deparses relational algebra tree to SQL
          * 
-         * @param ra_root pointer to root of relational algebra tree
          * @return SQL statement as string
          */
-        std::string deparse_ra_tree(Ra__Node* ra_root);
+        std::string deparse();
 
     private:
+        /// root node of relational algebra tree
+        RaTree* raTree;
+
+        /**
+         * Deparses a relational algebra projection node to a SQL select statement
+         * 
+         * @param ra_root pointer to root of relational algebra tree
+         * @return SQL select statement as string
+         */
+        std::string deparse_ctes(std::vector<Ra__Node*>);
+
+        /**
+         * Deparses a relational algebra projection node to a SQL select statement
+         * 
+         * @param ra_root pointer to root of relational algebra tree
+         * @return SQL select statement as string
+         */
+        std::string deparse_projection(Ra__Node* node);
+
         /**
          * Deparses a relational algebra tree node to SQL. Recursively called on all children
          * 

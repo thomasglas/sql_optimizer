@@ -7,6 +7,14 @@
 
 #include "deparse_ra_to_sql.h"
 
+RAtoSQL::RAtoSQL(RaTree* _raTree)
+:raTree(_raTree){
+};
+
+RAtoSQL::~RAtoSQL(){
+    delete raTree;
+};
+
 std::string RAtoSQL::deparse_expression(Ra__Node* arg){
     std::string result = "";
 
@@ -237,10 +245,10 @@ void RAtoSQL::deparse_ra_node(Ra__Node* node, size_t layer,
                         subquery_columns += col_rename + ",";
                     }
                     subquery_columns.pop_back();
-                    from += "(" + deparse_ra_tree(node) + ") as " + pr->subquery_alias + "(" + subquery_columns + ")" + ", ";
+                    from += "(" + deparse_projection(node) + ") as " + pr->subquery_alias + "(" + subquery_columns + ")" + ", ";
                 }
                 else{
-                    from += "(" + deparse_ra_tree(node) + ") as " + pr->subquery_alias + ", "; 
+                    from += "(" + deparse_projection(node) + ") as " + pr->subquery_alias + ", "; 
                 }
             }
             break;
@@ -306,7 +314,7 @@ void RAtoSQL::deparse_ra_node(Ra__Node* node, size_t layer,
     }
 }
 
-std::string RAtoSQL::deparse_ra_tree(Ra__Node* ra_root){
+std::string RAtoSQL::deparse_projection(Ra__Node* node){
 
     std::string select = "";
     std::string from = "";
@@ -315,7 +323,7 @@ std::string RAtoSQL::deparse_ra_tree(Ra__Node* ra_root){
     std::string having = "";
     std::string order_by = "";
 
-    deparse_ra_node(ra_root, 0, select, where, from, group_by, having, order_by);
+    deparse_ra_node(node, 0, select, where, from, group_by, having, order_by);
 
     if(select.length()==0){
         select = "*";
@@ -349,4 +357,33 @@ std::string RAtoSQL::deparse_ra_tree(Ra__Node* ra_root){
     }
 
     return sql;
+}
+
+std::string RAtoSQL::deparse_ctes(std::vector<Ra__Node*> ctes){
+    std::string sql = "with ";
+    for(auto& cte: ctes){
+        auto cte_pr = static_cast<Ra__Node__Projection*>(cte);
+        std::string cte_cols = "";
+        if(cte_pr->subquery_columns.size()>0){
+            cte_cols += "(";
+            for(auto& col: cte_pr->subquery_columns){
+                cte_cols += col + ",";
+            }
+            cte_cols.pop_back();
+            cte_cols += ")";
+        }
+        sql += cte_pr->subquery_alias + cte_cols + " as (\n";
+        sql += deparse_projection(cte);
+        sql += "),";
+    }
+    sql.pop_back();
+    sql += "\n";
+
+    return sql;
+}
+
+std::string RAtoSQL::deparse(){
+    std::string cte_str = deparse_ctes(raTree->ctes);
+    std::string select_str = deparse_projection(raTree->root);
+    return cte_str + select_str;
 }

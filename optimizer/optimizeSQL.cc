@@ -11,6 +11,7 @@
 #include "optimizer/relational_algebra.h"
 #include "optimizer/parse_sql_to_ra.h"
 #include "optimizer/deparse_ra_to_sql.h"
+#include "optimizer/ra_tree.h"
 
 std::vector<const char*> tests = {
   "SELECT s.name, s.id from students s, exams e where s.id=1 and s.name='Thomas' or not s.avg>2.0",
@@ -110,11 +111,11 @@ void parse_json(){
 void run_tests(){
   std::cout << "\n===== tests =====" << std::endl;
   for(auto test: tests){
-    SQLtoRA sql_to_ra;
-    Ra__Node* ra_root = sql_to_ra.parse(test);
-    std::cout << ra_root->to_string() <<std::endl;
-    RAtoSQL ra_to_sql;
-    std::string sql = ra_to_sql.deparse_ra_tree(ra_root);
+    SQLtoRA* sql_to_ra = new SQLtoRA();
+    RaTree* raTree = sql_to_ra->parse(test);
+    std::cout << raTree->root->to_string() <<std::endl;
+    RAtoSQL* ra_to_sql = new RAtoSQL(raTree);
+    std::string sql = ra_to_sql->deparse();
     std::cout << sql << std::endl;
   }
 }
@@ -122,38 +123,38 @@ void run_tests(){
 void run_tests_correlated(){
   std::cout << "\n===== correlated tests =====" << std::endl;
   for(auto test: tests_correlated){
-    SQLtoRA sql_to_ra;
-    Ra__Node* ra_root = sql_to_ra.parse(test);
-    std::cout << ra_root->to_string() << "\n" << std::endl;
+    SQLtoRA* sql_to_ra = new SQLtoRA();
+    RaTree* raTree = sql_to_ra->parse(test);
+    std::cout << raTree->root->to_string() << "\n" << std::endl;
   }
 }
 
 void run_q1q2(){
   std::cout << "\n===== Q1Q2 tests =====" << std::endl;
   for(auto test: Q1Q2){
-    SQLtoRA sql_to_ra;
-    Ra__Node* ra_root = sql_to_ra.parse(test);
-    std::cout << ra_root->to_string() << "\n" << std::endl;
+    SQLtoRA* sql_to_ra = new SQLtoRA();
+    RaTree* raTree = sql_to_ra->parse(test);
+    std::cout << raTree->root->to_string() << "\n" << std::endl;
   }
 }
 
 void run_tpch(){
   std::cout << "\n===== TPCH tests =====" << std::endl;
   for(auto test: tpch_correlated){
-    SQLtoRA sql_to_ra;
-    Ra__Node* ra_root = sql_to_ra.parse(test);
-    std::cout << ra_root->to_string() << "\n" << std::endl;
+    SQLtoRA* sql_to_ra = new SQLtoRA();
+    RaTree* raTree = sql_to_ra->parse(test);
+    std::cout << raTree->root->to_string() << "\n" << std::endl;
   }
 }
 
 void run_tpch_uncorrelated(){
   std::cout << "\n===== TPCH tests =====" << std::endl;
   for(auto test: tpch_uncorrelated){
-    SQLtoRA sql_to_ra;
-    Ra__Node* ra_root = sql_to_ra.parse(test);
-    std::cout << ra_root->to_string() << "\n" << std::endl;
-    RAtoSQL ra_to_sql;
-    std::string sql = ra_to_sql.deparse_ra_tree(ra_root);
+    SQLtoRA* sql_to_ra = new SQLtoRA();
+    RaTree* raTree = sql_to_ra->parse(test);
+    std::cout << raTree->root->to_string() << "\n" << std::endl;
+    RAtoSQL* ra_to_sql = new RAtoSQL(raTree);
+    std::string sql = ra_to_sql->deparse();
     std::cout << sql << std::endl;
   }
 }

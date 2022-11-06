@@ -4,26 +4,27 @@
 #include <pg_query.h>
 #include "protobuf/pg_query.pb-c.h"
 #include "relational_algebra.h"
+#include "ra_tree.h"
 
 class SQLtoRA{
     public:
+        SQLtoRA();
+        ~SQLtoRA();
+
         /**
          * Parses SQL and translates to relational algebra
          * 
          * @param query SQL query
          * @return Pointer to root node of relational algebra tree
          */
-        Ra__Node* parse(const char* query);
-
-        ~SQLtoRA(){
-            for(auto cte: cte_relations){
-                delete cte;
-            }
-        };
+        RaTree* parse(const char* query);
 
     private:
-        /// vector of all relations defined as Common Table Expressions
-        std::vector<Ra__Node__Relation*> cte_relations;
+        /// Root node of main relational algebra tree
+        Ra__Node* ra_tree_root;
+
+        /// Relational algebra trees of Common Table Expressions
+        std::vector<Ra__Node*> ctes;
 
         /**
          * Builds relational algebra tree for "select" statement
@@ -33,6 +34,13 @@ class SQLtoRA{
          */
         Ra__Node* parse_select_statement(PgQuery__SelectStmt* select_stmt);
         
+        /**
+         * Parses a with clause
+         *
+         * @param select_stmt pointer to with clause 
+         */
+        void parse_with(PgQuery__WithClause* with_clause);
+
         /**
          * Parses a select clause
          *

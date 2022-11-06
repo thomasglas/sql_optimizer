@@ -4,6 +4,17 @@
 #include <set>
 #include "parse_sql_to_ra.h"
 
+SQLtoRA::SQLtoRA(){
+    ra_tree_root = nullptr;
+}
+
+SQLtoRA::~SQLtoRA(){
+    delete ra_tree_root;
+    for(auto cte: ctes){
+        delete cte;
+    }
+};
+
 void SQLtoRA::parse_expression(PgQuery__Node* node, Ra__Node** ra_arg, bool& has_aggregate){
     switch(node->node_case){
         case PG_QUERY__NODE__NODE_COLUMN_REF: {
@@ -382,13 +393,14 @@ bool SQLtoRA::is_correlated_subquery(PgQuery__SelectStmt* select_stmt){
             }
         }
         // check ctes
-        for(const auto& cte: cte_relations){
-            if(attr->alias.length()>0 && attr->alias==cte->name){
+        for(const auto& cte: ctes){
+            auto cte_pr = static_cast<Ra__Node__Projection*>(cte);
+            if(attr->alias.length()>0 && attr->alias==cte_pr->subquery_alias){
                 found = true;
                 break;
             }
-            for(auto& cte_attr: cte->attributes){
-                if(attr->name==cte_attr->name){
+            for(auto& cte_attr: cte_pr->subquery_columns){
+                if(attr->name==cte_attr){
                     found = true;
                     break;
                 }
@@ -766,114 +778,75 @@ Ra__Node* SQLtoRA::parse_having(PgQuery__Node* having_clause){
     return having;
 }
 
-void SQLtoRA::get_relations(Ra__Node** it, std::vector<Ra__Node**>& relations){
-    if((*it)->n_children == 0){
-        assert((*it)->node_case==RA__NODE__RELATION);
-        relations.push_back(it);
-        return;
-    }
-
-    for(auto& child: (*it)->childNodes){
-        get_relations(&child, relations);
-    }
-    return;
-}
-
-Ra__Node* SQLtoRA::parse_select_statement(PgQuery__SelectStmt* select_stmt){
-    /* WITH */
-    std::vector<Ra__Node*> ctes;
-    if(select_stmt->with_clause!=nullptr){
-        for(size_t i=0; i<select_stmt->with_clause->n_ctes; i++){
+void SQLtoRA::parse_with(PgQuery__WithClause* with_clause){
+    if(with_clause!=nullptr){
+        for(size_t i=0; i<with_clause->n_ctes; i++){
             // parse cte subqueries, for substitution
-            PgQuery__CommonTableExpr* cte = select_stmt->with_clause->ctes[i]->common_table_expr;
+            PgQuery__CommonTableExpr* cte = with_clause->ctes[i]->common_table_expr;
             Ra__Node__Projection* pr = static_cast<Ra__Node__Projection*>(parse_select_statement(cte->ctequery->select_stmt));
             pr->subquery_alias = cte->ctename;
             for(size_t j=0; j<cte->n_aliascolnames; j++){
                 pr->subquery_columns.push_back(cte->aliascolnames[j]->string->str);
             }
             ctes.push_back(pr);
-
-            // save cte relation attributes, for checking subquery correlation
-            Ra__Node__Relation* cte_rel = new Ra__Node__Relation(cte->ctename);
-            for(size_t j=0; j<cte->n_aliascolnames; j++){
-                Ra__Node__Attribute* attr = new Ra__Node__Attribute(cte->aliascolnames[j]->string->str);
-                cte_rel->attributes.push_back(attr);
-            }
-            cte_relations.push_back(cte_rel);
         }
     }
+}
+
+Ra__Node* SQLtoRA::parse_select_statement(PgQuery__SelectStmt* select_stmt){
+    /* WITH */
+    parse_with(select_stmt->with_clause);
 
     /* SELECT */
-    Ra__Node* projection = parse_select(select_stmt);
-    Ra__Node* it = projection;
+    Ra__Node* root = parse_select(select_stmt);
 
     /* ORDER BY */
     Ra__Node* sort_operator = parse_order_by(select_stmt->sort_clause, select_stmt->n_sort_clause);
     if(sort_operator != nullptr){
         // add sort underneath projection
-        add_subtree(it, sort_operator);
+        add_subtree(root, sort_operator);
     }
 
     /* HAVING */
     Ra__Node* having_operator = parse_having(select_stmt->having_clause);
     if(having_operator != nullptr){
         // add sort underneath projection
-        add_subtree(it, having_operator);
+        add_subtree(root, having_operator);
     }
 
     /* GROUP BY */
     Ra__Node* group_by = parse_group_by(select_stmt->group_clause, select_stmt->n_group_clause);
     if(group_by != nullptr){
         // add sort underneath projection
-        add_subtree(it, group_by);
+        add_subtree(root, group_by);
     }
 
     /* WHERE */
     Ra__Node* selections = parse_where(select_stmt->where_clause);
     if(selections != nullptr){
         // add selections to bottom of linear subtree
-        add_subtree(it, selections);
+        add_subtree(root, selections);
     }
 
     /* FROM */
     Ra__Node* cross_products = parse_from(select_stmt->from_clause, select_stmt->n_from_clause);
     if(cross_products != nullptr){
         // add cross products to first empty child ("where" could have produced cp already)
-        add_subtree(it, cross_products);
+        add_subtree(root, cross_products);
     }
 
-    /* CTES */
-    // go through tree, replace relations with CTES
-    if(ctes.size()>0){
-        std::vector<Ra__Node**> relations;
-        get_relations(&it, relations);
-
-        for(Ra__Node** relation_ptr: relations){
-            for(Ra__Node* cte: ctes){
-                Ra__Node__Relation* relation = static_cast<Ra__Node__Relation*>(*relation_ptr);
-                Ra__Node__Projection* pr = static_cast<Ra__Node__Projection*>(cte);
-                if(relation->name==pr->subquery_alias){
-                    *relation_ptr = cte;
-                    break;
-                }
-            }
-        }
-    }
-
-    return projection;
+    return root;
 };
 
-Ra__Node* SQLtoRA::parse(const char* query){
+RaTree* SQLtoRA::parse(const char* query){
 
     PgQueryProtobufParseResult result = pg_query_parse_protobuf(query);
     PgQuery__ParseResult* parse_result = pg_query__parse_result__unpack(NULL, result.parse_tree.len, (const uint8_t*) result.parse_tree.data);
 
     // currently only supports parsing the first statement
-    for(size_t i=0; i<parse_result->n_stmts; i++){
-        PgQuery__RawStmt* raw_stmt = parse_result->stmts[i];
-        PgQuery__Node* stmt = raw_stmt->stmt;
+    assert(parse_result->n_stmts==1);
+    PgQuery__Node* stmt = parse_result->stmts[0]->stmt;
+    ra_tree_root = parse_select_statement(stmt->select_stmt);
 
-        return parse_select_statement(stmt->select_stmt);
-    }
-    return nullptr;
+    return new RaTree(ra_tree_root, ctes);
 }
