@@ -20,6 +20,8 @@ class SQLtoRA{
         RaTree* parse(const char* query);
 
     private:
+        size_t counter = 1;
+
         /// Root node of main relational algebra tree
         Ra__Node* ra_tree_root;
 
@@ -164,6 +166,25 @@ class SQLtoRA{
         bool is_tpch_attribute(std::string attr, std::string relation);
 
         /**
+         * Parses an "in" subquery
+         *
+         * @param sub_link pointer to in subquery
+         * @param negated if the exists subquery is negated
+         * @return Relational algebra subtree with join node and subquery on one side of join
+         */
+        Ra__Node* parse_where_in_subquery(PgQuery__SubLink* sub_link, bool negated);
+
+        /**
+         * Parses an "in" list expression
+         *
+         * @param l_expr pointer to left expression of "in" 
+         * @param r_expr pointer to right expression of "in" (list) 
+         * @param negated if the in subquery is negated
+         * @return Relational algebra subtree with join node and subquery on one side of join
+         */
+        Ra__Node* parse_where_in_list(PgQuery__Node* l_expr, PgQuery__Node* r_expr, bool negated);
+
+        /**
          * Parses an exists subquery
          *
          * @param select_stmt pointer to select statement of subquery
@@ -201,7 +222,7 @@ class SQLtoRA{
          * Parses an expression
          *
          * @param node pointer to expression
-         * @param ra_arg Pointer to relational algebra expression, assigned in function
+         * @param ra_arg Pointer to relational algebra node, to be assigned with the parsed expression
          * @param has_aggregate Flag which is set to true, if aggregating expression is found
          */
         void parse_expression(PgQuery__Node* node, Ra__Node** ra_arg, bool& has_aggregate);

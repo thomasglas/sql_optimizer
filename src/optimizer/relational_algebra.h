@@ -30,6 +30,8 @@ typedef enum {
     RA__NODE__LIST = 19,
     RA__NODE__CASE_EXPR = 20,
     RA__NODE__CASE_WHEN = 21,
+    RA__NODE__VALUES = 22,
+    RA__NODE__NULL_TEST = 23,
 } Ra__Node__NodeCase;
 
 typedef enum {
@@ -81,6 +83,11 @@ typedef enum {
     RA__ORDER_BY__ASC = 1,
     RA__ORDER_BY__DESC = 2,
 } Ra__Order_By__SortDirection;
+
+typedef enum {
+    RA__NULL_TEST__IS_NULL = 0,
+    RA__NULL_TEST__IS_NOT_NULL = 1,
+} Ra__Null_Test__Type;
 
 typedef enum {
     RA__TYPE_CAST__DATE = 0,
@@ -292,6 +299,24 @@ class Ra__Node__Case_When: public Ra__Node {
         ~Ra__Node__Case_When();
         Ra__Node* when; // predicate
         Ra__Node* then; // expression
+};
+
+class Ra__Node__Values: public Ra__Node {
+    public:
+        Ra__Node__Values();
+        ~Ra__Node__Values();
+        std::string to_string();
+        std::vector<Ra__Node*> values; // constants
+        std::string alias;
+        std::string column;
+};
+
+class Ra__Node__Null_Test: public Ra__Node {
+    public:
+        Ra__Node__Null_Test();
+        ~Ra__Node__Null_Test();
+        Ra__Node* arg;
+        Ra__Null_Test__Type type;
 };
 
 class Ra__Node__Dummy: public Ra__Node {

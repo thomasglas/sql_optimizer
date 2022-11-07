@@ -97,6 +97,21 @@ std::string RAtoSQL::deparse_expression(Ra__Node* arg){
             }
             result += " end";
         }
+        case RA__NODE__NULL_TEST:{
+            auto null_test = static_cast<Ra__Node__Null_Test*>(arg);
+            result += deparse_expression(null_test->arg);
+            switch(null_test->type){
+                case RA__NULL_TEST__IS_NULL:{
+                    result += " is null";
+                    break;
+                }
+                case RA__NULL_TEST__IS_NOT_NULL:{
+                    result += " is not null";
+                    break;
+                }
+            }
+            break;
+        }
         case RA__NODE__DUMMY: break; //e.g. (dummy)-name
         default: std::cout << "error deparse select" << std::endl;
     }
@@ -360,25 +375,27 @@ std::string RAtoSQL::deparse_projection(Ra__Node* node){
 }
 
 std::string RAtoSQL::deparse_ctes(std::vector<Ra__Node*> ctes){
-    std::string sql = "with ";
-    for(auto& cte: ctes){
-        auto cte_pr = static_cast<Ra__Node__Projection*>(cte);
-        std::string cte_cols = "";
-        if(cte_pr->subquery_columns.size()>0){
-            cte_cols += "(";
-            for(auto& col: cte_pr->subquery_columns){
-                cte_cols += col + ",";
+    std::string sql = "";
+    if(ctes.size()>0){
+        sql += "with ";
+        for(auto& cte: ctes){
+            auto cte_pr = static_cast<Ra__Node__Projection*>(cte);
+            std::string cte_cols = "";
+            if(cte_pr->subquery_columns.size()>0){
+                cte_cols += "(";
+                for(auto& col: cte_pr->subquery_columns){
+                    cte_cols += col + ",";
+                }
+                cte_cols.pop_back();
+                cte_cols += ")";
             }
-            cte_cols.pop_back();
-            cte_cols += ")";
+            sql += cte_pr->subquery_alias + cte_cols + " as (\n";
+            sql += deparse_projection(cte);
+            sql += "),";
         }
-        sql += cte_pr->subquery_alias + cte_cols + " as (\n";
-        sql += deparse_projection(cte);
-        sql += "),";
+        sql.pop_back();
+        sql += "\n";
     }
-    sql.pop_back();
-    sql += "\n";
-
     return sql;
 }
 

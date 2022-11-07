@@ -303,6 +303,31 @@ Ra__Node__Case_When::~Ra__Node__Case_When(){
     delete then;
 }
 
+Ra__Node__Values::Ra__Node__Values(){
+    node_case = Ra__Node__NodeCase::RA__NODE__VALUES;
+    n_children = 0;
+}
+
+Ra__Node__Values::~Ra__Node__Values(){
+    for(auto value: values){
+        delete value;
+    }
+}
+
+std::string Ra__Node__Values::to_string(){
+    return alias;
+}
+
+Ra__Node__Null_Test::Ra__Node__Null_Test(){
+    node_case = Ra__Node__NodeCase::RA__NODE__NULL_TEST;
+    n_children = 0;
+    arg = nullptr;
+}
+
+Ra__Node__Null_Test::~Ra__Node__Null_Test(){
+    delete arg;
+}
+
 Ra__Node__Dummy::Ra__Node__Dummy(){
     node_case = Ra__Node__NodeCase::RA__NODE__DUMMY;
     n_children = 0;
