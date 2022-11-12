@@ -182,7 +182,7 @@ class SQLtoRA{
          * @param negated if the in subquery is negated
          * @return Relational algebra subtree with join node and subquery on one side of join
          */
-        Ra__Node* parse_where_in_list(PgQuery__Node* l_expr, PgQuery__Node* r_expr, bool negated);
+        Ra__Node* parse_where_in_list(PgQuery__Node* r_expr);
 
         /**
          * Parses an exists subquery

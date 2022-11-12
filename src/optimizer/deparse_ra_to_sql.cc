@@ -210,6 +210,17 @@ std::string RAtoSQL::deparse_predicate(Ra__Node* node){
             Ra__Node__Predicate* p = static_cast<Ra__Node__Predicate*>(node);
             return deparse_predicate(p->left) + p->binaryOperator + deparse_predicate(p->right);
         }
+        case RA__NODE__IN_LIST: {
+            Ra__Node__In_List* list = static_cast<Ra__Node__In_List*>(node);
+            std::string str = "(";
+            for(auto& arg: list->args){
+                str += deparse_expression(arg) + ",";
+            }
+            str.pop_back();
+            str += ")";
+
+            return str;
+        }
         default: {
             Ra__Node__Expression* expression = static_cast<Ra__Node__Expression*>(node);
             return deparse_expression(expression);

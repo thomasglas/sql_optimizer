@@ -32,6 +32,7 @@ typedef enum {
     RA__NODE__CASE_WHEN = 21,
     RA__NODE__VALUES = 22,
     RA__NODE__NULL_TEST = 23,
+    RA__NODE__IN_LIST = 24,
 } Ra__Node__NodeCase;
 
 typedef enum {
@@ -282,6 +283,13 @@ class Ra__Node__List: public Ra__Node {
     public:
         Ra__Node__List();
         ~Ra__Node__List();
+        std::vector<Ra__Node*> args;
+};
+
+class Ra__Node__In_List: public Ra__Node {
+    public:
+        Ra__Node__In_List();
+        ~Ra__Node__In_List();
         std::vector<Ra__Node*> args;
 };
 

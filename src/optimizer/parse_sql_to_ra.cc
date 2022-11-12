@@ -293,58 +293,70 @@ Ra__Node* SQLtoRA::parse_where_subquery(PgQuery__SelectStmt* select_stmt, Ra__No
     return join;
 };
 
-Ra__Node* SQLtoRA::parse_where_in_list(PgQuery__Node* l_expr, PgQuery__Node* r_expr, bool negated){  
+Ra__Node* SQLtoRA::parse_where_in_list(PgQuery__Node* r_expr){  
     
-    Ra__Node* join;
-    if(negated){
-        join = new Ra__Node__Join(RA__JOIN__ANTI_LEFT_DEPENDENT);
-    }
-    else{
-        join = new Ra__Node__Join(RA__JOIN__SEMI_LEFT_DEPENDENT);
-    }
+    auto list = new Ra__Node__In_List();
 
-    // translate x in (a,b,c) to "select attr from (values ('MAIL'), ('SHIP')) as t(attr) where t.attr=x"    
-    Ra__Node__Values* values = new Ra__Node__Values();
-    values->values.resize(r_expr->list->n_items);
-    for(size_t i=0; i<values->values.size(); i++){
+    list->args.resize(r_expr->list->n_items);
+    for(size_t i=0; i<list->args.size(); i++){
         Ra__Node* constant;
         bool dummy_has_aggregate;
         parse_expression(r_expr->list->items[i], &constant, dummy_has_aggregate);
-        values->values[i] = constant;
+        list->args[i] = constant;
     }
-    values->alias = "values_" + std::to_string(counter);
-    values->column = "a_" + std::to_string(counter);
-    counter++;
 
-    // predicate to transform "in" into "exists"
-    Ra__Node__Predicate* eq_predicate = new Ra__Node__Predicate();
-    eq_predicate->binaryOperator = "=";
-    bool dummy_has_aggregate;
-    parse_expression(l_expr, &(eq_predicate->left), dummy_has_aggregate);
-    assert(r_expr->node_case==PG_QUERY__NODE__NODE_LIST);
-    eq_predicate->right = new Ra__Node__Attribute(values->column, values->alias);
+    return list;
 
-    // not null check; "in" operator can return null, exists only true/false
-    Ra__Node__Null_Test* null_test = new Ra__Node__Null_Test();
-    null_test->type = RA__NULL_TEST__IS_NOT_NULL;
-    null_test->arg = eq_predicate->left;
+    // Ra__Node* join;
+    // if(negated){
+    //     join = new Ra__Node__Join(RA__JOIN__ANTI_LEFT_DEPENDENT);
+    // }
+    // else{
+    //     join = new Ra__Node__Join(RA__JOIN__SEMI_LEFT_DEPENDENT);
+    // }
 
-    // bool and predicate
-    auto bool_and = new Ra__Node__Bool_Predicate();
-    bool_and->bool_operator = RA__BOOL_OPERATOR__AND;
-    bool_and->args.push_back(eq_predicate);
-    bool_and->args.push_back(null_test);
+    // // translate x in (a,b,c) to "select attr from (values ('MAIL'), ('SHIP')) as t(attr) where t.attr=x"    
+    // Ra__Node__Values* values = new Ra__Node__Values();
+    // values->values.resize(r_expr->list->n_items);
+    // for(size_t i=0; i<values->values.size(); i++){
+    //     Ra__Node* constant;
+    //     bool dummy_has_aggregate;
+    //     parse_expression(r_expr->list->items[i], &constant, dummy_has_aggregate);
+    //     values->values[i] = constant;
+    // }
+    // values->alias = "values_" + std::to_string(counter);
+    // values->column = "a_" + std::to_string(counter);
+    // counter++;
 
-    Ra__Node__Selection* sel = new Ra__Node__Selection();
-    sel->predicate = bool_and;
-    sel->childNodes.push_back(values);
+    // // predicate to transform "in" into "exists"
+    // Ra__Node__Predicate* eq_predicate = new Ra__Node__Predicate();
+    // eq_predicate->binaryOperator = "=";
+    // bool dummy_has_aggregate;
+    // parse_expression(l_expr, &(eq_predicate->left), dummy_has_aggregate);
+    // assert(r_expr->node_case==PG_QUERY__NODE__NODE_LIST);
+    // eq_predicate->right = new Ra__Node__Attribute(values->column, values->alias);
 
-    Ra__Node__Projection* pr = new Ra__Node__Projection();
-    pr->args.push_back(new Ra__Node__Attribute(values->column, values->alias));
-    pr->childNodes.push_back(sel);
+    // // not null check; "in" operator can return null, exists only true/false
+    // Ra__Node__Null_Test* null_test = new Ra__Node__Null_Test();
+    // null_test->type = RA__NULL_TEST__IS_NOT_NULL;
+    // null_test->arg = eq_predicate->left;
 
-    join->childNodes.push_back(pr);
-    return join;
+    // // bool and predicate
+    // auto bool_and = new Ra__Node__Bool_Predicate();
+    // bool_and->bool_operator = RA__BOOL_OPERATOR__AND;
+    // bool_and->args.push_back(eq_predicate);
+    // bool_and->args.push_back(null_test);
+
+    // Ra__Node__Selection* sel = new Ra__Node__Selection();
+    // sel->predicate = bool_and;
+    // sel->childNodes.push_back(values);
+
+    // Ra__Node__Projection* pr = new Ra__Node__Projection();
+    // pr->args.push_back(new Ra__Node__Attribute(values->column, values->alias));
+    // pr->childNodes.push_back(sel);
+
+    // join->childNodes.push_back(pr);
+    // return join;
 }
 
 Ra__Node* SQLtoRA::parse_where_in_subquery(PgQuery__SubLink* sub_link, bool negated){    
@@ -584,6 +596,7 @@ Ra__Node* SQLtoRA::parse_where_expression(PgQuery__Node* node, Ra__Node* ra_sele
             }
             else{
                 Ra__Node__Bool_Predicate* p = new Ra__Node__Bool_Predicate();
+                bool is_not = false;
                 switch(expr->boolop){
                     case PG_QUERY__BOOL_EXPR_TYPE__AND_EXPR: {
                         p->bool_operator = RA__BOOL_OPERATOR__AND;
@@ -595,9 +608,16 @@ Ra__Node* SQLtoRA::parse_where_expression(PgQuery__Node* node, Ra__Node* ra_sele
                     }
                     case PG_QUERY__BOOL_EXPR_TYPE__NOT_EXPR: {
                         p->bool_operator = RA__BOOL_OPERATOR__NOT;
+                        is_not = true;
                         break;
                     }
                 }
+                // for(size_t i=0; i<expr->n_args; i++){
+                //     Ra__Node* predicate =  parse_where_expression(expr->args[i], ra_selection, is_not);
+                //     if(predicate!=nullptr){
+                //         p->args.push_back(predicate);
+                //     }
+                // }
                 for(auto& non_sublink: non_sublinks){
                     Ra__Node* predicate =  parse_where_expression(non_sublink, ra_selection);
                     if(predicate!=nullptr){
@@ -635,14 +655,18 @@ Ra__Node* SQLtoRA::parse_where_expression(PgQuery__Node* node, Ra__Node* ra_sele
                     std::string s(a_expr->name[0]->string->str);
                     // "in"
                     if(s == "="){
-                        add_subtree(ra_selection, parse_where_in_list(a_expr->lexpr, a_expr->rexpr, false));  
+                        p->binaryOperator = " in ";
+                        // add_subtree(ra_selection, parse_where_in_list(a_expr->lexpr, a_expr->rexpr, false));  
                     }
                     // "not in"
                     else if(s == "<>") {
-                        add_subtree(ra_selection, parse_where_in_list(a_expr->lexpr, a_expr->rexpr, true)); 
+                        p->binaryOperator = " not in ";
+                        // add_subtree(ra_selection, parse_where_in_list(a_expr->lexpr, a_expr->rexpr, true)); 
                     }
-                    delete p;
-                    return nullptr;
+                    bool dummy_has_aggregate;
+                    parse_expression(a_expr->lexpr, &(p->left), dummy_has_aggregate);
+                    p->right = parse_where_in_list(a_expr->rexpr);
+                    return p;
                 }
                 default: std::cout << "expr kind not supported" << std::endl;
             }

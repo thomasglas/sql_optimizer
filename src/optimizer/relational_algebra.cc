@@ -282,6 +282,17 @@ Ra__Node__List::~Ra__Node__List(){
     }
 }
 
+Ra__Node__In_List::Ra__Node__In_List(){
+    node_case = Ra__Node__NodeCase::RA__NODE__IN_LIST;
+    n_children = 0;
+}
+
+Ra__Node__In_List::~Ra__Node__In_List(){
+    for(auto arg: args){
+        delete arg;
+    }
+}
+
 Ra__Node__Case_Expr::Ra__Node__Case_Expr(){
     node_case = Ra__Node__NodeCase::RA__NODE__CASE_EXPR;
     n_children = 0;
