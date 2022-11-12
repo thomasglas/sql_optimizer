@@ -60,6 +60,8 @@ std::string Ra__Node__Join::to_string(){
 
 std::string Ra__Node__Join::join_name(){
     switch(type){
+        case RA__JOIN__DEPENDENT_INNER_RIGHT:
+        case RA__JOIN__DEPENDENT_INNER_LEFT:
         case RA__JOIN__INNER: return " join ";
         case RA__JOIN__LEFT: return " left join ";
         case RA__JOIN__RIGHT: return " right join ";

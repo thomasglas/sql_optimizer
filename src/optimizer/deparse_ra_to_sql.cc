@@ -55,7 +55,10 @@ std::string RAtoSQL::deparse_expression(Ra__Node* arg){
         }
         case RA__NODE__TYPE_CAST: {
             auto type_cast = static_cast<Ra__Node__Type_Cast*>(arg);
-            result += type_cast->type + " " + deparse_expression(type_cast->expression) + " " + type_cast->typ_mod;
+            if(type_cast->typ_mod.length()>0)
+                result += type_cast->type + " " + deparse_expression(type_cast->expression) + " " + type_cast->typ_mod;
+            else
+                result += type_cast->type + " " + deparse_expression(type_cast->expression);
             break;
         }
         case RA__NODE__SELECT_EXPRESSION:{
@@ -96,6 +99,7 @@ std::string RAtoSQL::deparse_expression(Ra__Node* arg){
                 result += " else " + deparse_expression(case_expr->else_default);
             }
             result += " end";
+            break;
         }
         case RA__NODE__NULL_TEST:{
             auto null_test = static_cast<Ra__Node__Null_Test*>(arg);
@@ -260,10 +264,10 @@ void RAtoSQL::deparse_ra_node(Ra__Node* node, size_t layer,
                         subquery_columns += col_rename + ",";
                     }
                     subquery_columns.pop_back();
-                    from += "(" + deparse_projection(node) + ") as " + pr->subquery_alias + "(" + subquery_columns + ")" + ", ";
+                    from += "(" + deparse_projection(node) + ") as " + pr->subquery_alias + "(" + subquery_columns + ")";
                 }
                 else{
-                    from += "(" + deparse_projection(node) + ") as " + pr->subquery_alias + ", "; 
+                    from += "(" + deparse_projection(node) + ") as " + pr->subquery_alias; 
                 }
             }
             break;
@@ -290,36 +294,86 @@ void RAtoSQL::deparse_ra_node(Ra__Node* node, size_t layer,
         }
         case RA__NODE__CROSS_PRODUCT: {
             deparse_ra_node(node->childNodes[0], layer, select, where, from, group_by, having, order_by);
+            from += ", ";
             deparse_ra_node(node->childNodes[1], layer, select, where, from, group_by, having, order_by);
             break;
         }
         case RA__NODE__RELATION: {
-            from += deparse_relation(node) + ", ";
+            from += deparse_relation(node);
             break;
         }
         case RA__NODE__JOIN: {
             Ra__Node__Join* join = static_cast<Ra__Node__Join*>(node);
             // switch case join type
             assert(join->is_full());
-            if(join->predicate==nullptr){
-                from += "(" + deparse_relation(join->childNodes[0]) + join->join_name() + deparse_relation(join->childNodes[1]) + ")";
-            }
-            else{
-                from += "(" + deparse_relation(join->childNodes[0]) + join->join_name() + deparse_relation(join->childNodes[1]) + " on " + deparse_predicate(join->predicate) + ")";
-            }
-            if(join->alias.length()>0){
-                from += " as " + join->alias; 
-            } 
-            if(join->columns.size()>0){
-                std::string columns = "(";
-                for(auto& col: join->columns){
-                    columns += col + ",";
+            switch(join->type){
+                case RA__JOIN__INNER: 
+                case RA__JOIN__LEFT: 
+                case RA__JOIN__RIGHT: 
+                case RA__JOIN__DEPENDENT_INNER_LEFT:  {
+                    if(join->predicate==nullptr){
+                        deparse_ra_node(join->childNodes[0],layer, select, where, from, group_by, having, order_by);
+                        from += join->join_name();
+                        deparse_ra_node(join->childNodes[1],layer, select, where, from, group_by, having, order_by);
+                    }
+                    else{
+                        deparse_ra_node(join->childNodes[0],layer, select, where, from, group_by, having, order_by);
+                        from += join->join_name();
+                        deparse_ra_node(join->childNodes[1],layer, select, where, from, group_by, having, order_by);
+                        from +=  " on " + deparse_predicate(join->predicate);
+                    }
+                    if(join->alias.length()>0){
+                        from += " as " + join->alias; 
+                    } 
+                    if(join->columns.size()>0){
+                        std::string columns = "(";
+                        for(auto& col: join->columns){
+                            columns += col + ",";
+                        }
+                        columns.pop_back();
+                        columns += ")";
+                        from += columns;
+                    };
+                    break;
                 }
-                columns.pop_back();
-                columns += ")";
-                from += columns;
+                // SJ -> exists 
+                case RA__JOIN__SEMI_LEFT: 
+                case RA__JOIN__SEMI_LEFT_DEPENDENT: {
+                    deparse_ra_node(node->childNodes[0],layer, select, where, from, group_by, having, order_by);
+                    if(where.length()>0){
+                        where += " and ";
+                    }
+                    where += "exists (";
+                    where += deparse_projection(node->childNodes[1]);
+                    where += ")";
+                    break;
+                }
+                // AJ -> not exists
+                case RA__JOIN__ANTI_LEFT: 
+                case RA__JOIN__ANTI_RIGHT: 
+                case RA__JOIN__ANTI_LEFT_DEPENDENT: 
+                case RA__JOIN__ANTI_RIGHT_DEPENDENT: {
+                    deparse_ra_node(node->childNodes[0],layer, select, where, from, group_by, having, order_by);
+                    if(where.length()>0){
+                        where += " and ";
+                    }
+                    where += "not exists (";
+                    where += deparse_projection(node->childNodes[1]);
+                    where += ")";
+                    break;
+                }
+                default: std::cout << "Join type not supported in decorrelation" << std::endl;
             }
-            from += ", ";
+            break;
+        }
+        case RA__NODE__VALUES:{
+            auto values = static_cast<Ra__Node__Values*>(node);
+            from += "(values";
+            for(auto& v: values->values){
+                from += "(" + deparse_expression(v) + "),";
+            }
+            from.pop_back();
+            from += ") as " + values->alias + "(" + values->column + ")";
             break;
         }
         default: {
@@ -350,8 +404,6 @@ std::string RAtoSQL::deparse_projection(Ra__Node* node){
     std::string sql = select + "\n";
     
     if(from.length()>0){
-        from.pop_back(); // remove ", "
-        from.pop_back();
         sql += "from " + from + "\n";
     }
     
