@@ -11,7 +11,6 @@ typedef enum {
     RA__NODE__ROOT = 0,
     RA__NODE__SELECTION = 1,
     RA__NODE__PROJECTION = 2,
-    RA__NODE__CROSS_PRODUCT = 3,
     RA__NODE__RELATION = 4,
     RA__NODE__GROUP_BY = 5,
     RA__NODE__EXPRESSION = 6,
@@ -64,6 +63,7 @@ typedef enum {
 } Ra__Const_DataType__DataType;
 
 typedef enum {
+    RA__JOIN__CROSS_PRODUCT = 13,
     RA__JOIN__INNER = 0,
     RA__JOIN__DEPENDENT_INNER_LEFT = 1,
     RA__JOIN__DEPENDENT_INNER_RIGHT = 2,
@@ -103,7 +103,6 @@ typedef enum {
 } Ra__Func_Call__Func;
 
 class Ra__Node;
-class Ra__Node__Cross_Product;
 class Ra__Node__Projection;
 class Ra__Node__Selection;
 class Ra__Node__Relation;
@@ -129,12 +128,6 @@ class Ra__Node{
         Ra__Node__NodeCase node_case;
         std::vector<Ra__Node*> childNodes;
         size_t n_children;
-};
-
-class Ra__Node__Cross_Product: public Ra__Node{
-    public:
-        Ra__Node__Cross_Product();
-        std::string to_string();
 };
 
 class Ra__Node__Join: public Ra__Node{

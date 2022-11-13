@@ -14,16 +14,6 @@ bool Ra__Node::is_full(){
     return n_children == childNodes.size();
 }
 
-Ra__Node__Cross_Product::Ra__Node__Cross_Product(){
-    node_case = Ra__Node__NodeCase::RA__NODE__CROSS_PRODUCT;
-    n_children = 2;
-}
-
-std::string Ra__Node__Cross_Product::to_string(){
-    assert(childNodes.size()==2);
-    return "(" + childNodes[0]->to_string() + ")X(" + childNodes[1]->to_string() + ")";
-}
-
 Ra__Node__Join::Ra__Node__Join(Ra__Join__JoinType _type)
 : type(_type)
 {
@@ -40,6 +30,7 @@ std::string Ra__Node__Join::to_string(){
     assert(this->is_full());
     std::string op;
     switch(type){
+        case RA__JOIN__CROSS_PRODUCT: op = "X"; break;
         case RA__JOIN__INNER: op = "J"; break;
         case RA__JOIN__LEFT: op = "LJ"; break;
         case RA__JOIN__RIGHT: op = "RJ"; break;

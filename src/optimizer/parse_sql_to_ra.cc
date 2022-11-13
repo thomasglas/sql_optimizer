@@ -274,7 +274,7 @@ Ra__Node* SQLtoRA::parse_where_subquery(PgQuery__SelectStmt* select_stmt, Ra__No
         join = new Ra__Node__Join(RA__JOIN__DEPENDENT_INNER_LEFT);
     }
     else{
-        join = new Ra__Node__Cross_Product();
+        join = new Ra__Node__Join(RA__JOIN__CROSS_PRODUCT);
     }
 
     Ra__Node__Attribute* attr;
@@ -879,12 +879,12 @@ Ra__Node* SQLtoRA::parse_from(PgQuery__Node** from_clause, size_t n_from_clause)
         return relations[0];
     }
 
-    Ra__Node__Cross_Product* cp = new Ra__Node__Cross_Product();
+    Ra__Node__Join* cp = new Ra__Node__Join(RA__JOIN__CROSS_PRODUCT);
 
     for(size_t i=0; i<relations.size(); i++){
         add_subtree(cp, relations[i]);
         if(i<relations.size()-2){
-            add_subtree(cp, new Ra__Node__Cross_Product());
+            add_subtree(cp, new Ra__Node__Join(RA__JOIN__CROSS_PRODUCT));
         }
     }
 

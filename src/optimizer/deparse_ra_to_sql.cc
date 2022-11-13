@@ -303,12 +303,6 @@ void RAtoSQL::deparse_ra_node(Ra__Node* node, size_t layer,
             deparse_ra_node(ha->childNodes[0], layer, select, where, from, group_by, having, order_by);
             break;
         }
-        case RA__NODE__CROSS_PRODUCT: {
-            deparse_ra_node(node->childNodes[0], layer, select, where, from, group_by, having, order_by);
-            from += ", ";
-            deparse_ra_node(node->childNodes[1], layer, select, where, from, group_by, having, order_by);
-            break;
-        }
         case RA__NODE__RELATION: {
             from += deparse_relation(node);
             break;
@@ -318,6 +312,12 @@ void RAtoSQL::deparse_ra_node(Ra__Node* node, size_t layer,
             // switch case join type
             assert(join->is_full());
             switch(join->type){
+                case RA__JOIN__CROSS_PRODUCT:{
+                    deparse_ra_node(join->childNodes[0], layer, select, where, from, group_by, having, order_by);
+                    from += ", ";
+                    deparse_ra_node(join->childNodes[1], layer, select, where, from, group_by, having, order_by);
+                    break;
+                }
                 case RA__JOIN__INNER: 
                 case RA__JOIN__LEFT: 
                 case RA__JOIN__RIGHT: 
