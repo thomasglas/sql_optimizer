@@ -256,8 +256,6 @@ Ra__Node* SQLtoRA::parse_from_subquery(PgQuery__RangeSubselect* range_subselect)
 
     if(is_correlated_subquery(range_subselect->subquery->select_stmt)){
         std::cout << "correlated subquery in from clause is not supported" << std::endl;
-        // result = new Ra__Node__Join(RA__JOIN__DEPENDENT_INNER_LEFT);
-        // result->childNodes.push_back(pr);
     }
     else{
         result = pr;
@@ -270,24 +268,27 @@ Ra__Node* SQLtoRA::parse_where_subquery(PgQuery__SelectStmt* select_stmt, Ra__No
     Ra__Node__Expression* predicate_expr = new Ra__Node__Expression();
 
     Ra__Node* join;
+    uint64_t marker = ++counter;
     if(is_correlated_subquery(select_stmt)){
-        join = new Ra__Node__Join(RA__JOIN__DEPENDENT_INNER_LEFT);
+        join = new Ra__Node__Join(RA__JOIN__DEPENDENT_INNER_LEFT,0,marker);
     }
     else{
-        join = new Ra__Node__Join(RA__JOIN__CROSS_PRODUCT);
+        join = new Ra__Node__Join(RA__JOIN__CROSS_PRODUCT,0,marker);
     }
 
     Ra__Node__Attribute* attr;
     Ra__Node__Projection* pr = static_cast<Ra__Node__Projection*>(parse_select_statement(select_stmt));
     
     // selection predicate
-    auto sel_expr = static_cast<Ra__Node__Select_Expression*>(pr->args[0]);
-    sel_expr->rename = "a_" + std::to_string(counter); // nested select can only produce one output
-    pr->subquery_alias = "r_" + std::to_string(counter);
-    counter++;
-    attr = new Ra__Node__Attribute(sel_expr->rename, pr->subquery_alias);
-    predicate_expr->add_arg(attr);
-    *ra_arg = predicate_expr;
+    // auto sel_expr = static_cast<Ra__Node__Select_Expression*>(pr->args[0]);
+    // counter++;
+    // sel_expr->rename = "a_" + std::to_string(counter); // nested select can only produce one output
+    // pr->subquery_alias = "r_" + std::to_string(counter);
+    // attr = new Ra__Node__Attribute(sel_expr->rename, pr->subquery_alias);
+    // predicate_expr->add_arg(attr);
+    // *ra_arg = predicate_expr;
+
+    *ra_arg = static_cast<Ra__Node__Join*>(join)->right_where_subquery_marker;
 
     join->childNodes.push_back(pr);
     return join;
@@ -306,35 +307,41 @@ Ra__Node* SQLtoRA::parse_where_in_list(PgQuery__Node* r_expr){
     }
 
     return list;
+}
 
-    // Ra__Node* join;
-    // if(negated){
-    //     join = new Ra__Node__Join(RA__JOIN__ANTI_LEFT_DEPENDENT);
-    // }
-    // else{
-    //     join = new Ra__Node__Join(RA__JOIN__SEMI_LEFT_DEPENDENT);
-    // }
+Ra__Node* SQLtoRA::parse_where_in_subquery(PgQuery__SubLink* sub_link, bool negated){    
+    Ra__Node__Join* join;
+    uint64_t marker = ++counter;
+    if(is_correlated_subquery(sub_link->subselect->select_stmt)){
+        if(negated){
+            join = new Ra__Node__Join(RA__JOIN__ANTI_IN_LEFT_DEPENDENT,0,marker);
+        }
+        else{
+            join = new Ra__Node__Join(RA__JOIN__IN_LEFT_DEPENDENT,0,marker);
+        }
+    }
+    else{
+        if(negated){
+            join = new Ra__Node__Join(RA__JOIN__ANTI_IN_LEFT,0,marker);
+        }
+        else{
+            join = new Ra__Node__Join(RA__JOIN__IN_LEFT,0,marker);
+        }
+    }
 
-    // // translate x in (a,b,c) to "select attr from (values ('MAIL'), ('SHIP')) as t(attr) where t.attr=x"    
-    // Ra__Node__Values* values = new Ra__Node__Values();
-    // values->values.resize(r_expr->list->n_items);
-    // for(size_t i=0; i<values->values.size(); i++){
-    //     Ra__Node* constant;
-    //     bool dummy_has_aggregate;
-    //     parse_expression(r_expr->list->items[i], &constant, dummy_has_aggregate);
-    //     values->values[i] = constant;
-    // }
-    // values->alias = "values_" + std::to_string(counter);
-    // values->column = "a_" + std::to_string(counter);
-    // counter++;
+    Ra__Node* subquery_root = parse_select_statement(sub_link->subselect->select_stmt); 
+    bool dummy_has_aggregate;
+    Ra__Node__Predicate* p = new Ra__Node__Predicate();
+    parse_expression(sub_link->testexpr, &(p->left), dummy_has_aggregate);
+    join->predicate = p;
 
     // // predicate to transform "in" into "exists"
     // Ra__Node__Predicate* eq_predicate = new Ra__Node__Predicate();
     // eq_predicate->binaryOperator = "=";
     // bool dummy_has_aggregate;
-    // parse_expression(l_expr, &(eq_predicate->left), dummy_has_aggregate);
-    // assert(r_expr->node_case==PG_QUERY__NODE__NODE_LIST);
-    // eq_predicate->right = new Ra__Node__Attribute(values->column, values->alias);
+    // parse_expression(sub_link->testexpr, &(eq_predicate->left), dummy_has_aggregate);
+    // auto select_expression = static_cast<Ra__Node__Select_Expression*>(static_cast<Ra__Node__Projection*>(subquery_root)->args[0]);
+    // eq_predicate->right = select_expression->expression;
 
     // // not null check; "in" operator can return null, exists only true/false
     // Ra__Node__Null_Test* null_test = new Ra__Node__Null_Test();
@@ -347,72 +354,30 @@ Ra__Node* SQLtoRA::parse_where_in_list(PgQuery__Node* r_expr){
     // bool_and->args.push_back(eq_predicate);
     // bool_and->args.push_back(null_test);
 
-    // Ra__Node__Selection* sel = new Ra__Node__Selection();
-    // sel->predicate = bool_and;
-    // sel->childNodes.push_back(values);
+    // // find subquery selection node, if exists, else create new selection node
+    // Ra__Node** it = &subquery_root;
+    // while((*it)->childNodes[0]->n_children==1){
+    //     it = &((*it)->childNodes[0]);
+    //     if((*it)->node_case==RA__NODE__SELECTION){
+    //         break;
+    //     }
+    // }
+    // if((*it)->node_case==RA__NODE__SELECTION){
+    //     auto sel = static_cast<Ra__Node__Selection*>(*it);
+    //     // add new predicates to original predicate
+    //     bool_and->args.push_back(sel->predicate);
 
-    // Ra__Node__Projection* pr = new Ra__Node__Projection();
-    // pr->args.push_back(new Ra__Node__Attribute(values->column, values->alias));
-    // pr->childNodes.push_back(sel);
+    //     // replace old selection predicate with new predicate
+    //     sel->predicate = bool_and;
+    // }
+    // // add selection if subquery has none
+    // else{
+    //     Ra__Node__Selection* sel = new Ra__Node__Selection();
+    //     sel->predicate = bool_and;
 
-    // join->childNodes.push_back(pr);
-    // return join;
-}
-
-Ra__Node* SQLtoRA::parse_where_in_subquery(PgQuery__SubLink* sub_link, bool negated){    
-    Ra__Node* join;
-    if(negated){
-        join = new Ra__Node__Join(RA__JOIN__ANTI_LEFT_DEPENDENT);
-    }
-    else{
-        join = new Ra__Node__Join(RA__JOIN__SEMI_LEFT_DEPENDENT);
-    }
-
-    Ra__Node* subquery_root = parse_select_statement(sub_link->subselect->select_stmt); 
-
-    // predicate to transform "in" into "exists"
-    Ra__Node__Predicate* eq_predicate = new Ra__Node__Predicate();
-    eq_predicate->binaryOperator = "=";
-    bool dummy_has_aggregate;
-    parse_expression(sub_link->testexpr, &(eq_predicate->left), dummy_has_aggregate);
-    auto select_expression = static_cast<Ra__Node__Select_Expression*>(static_cast<Ra__Node__Projection*>(subquery_root)->args[0]);
-    eq_predicate->right = select_expression->expression;
-
-    // not null check; "in" operator can return null, exists only true/false
-    Ra__Node__Null_Test* null_test = new Ra__Node__Null_Test();
-    null_test->type = RA__NULL_TEST__IS_NOT_NULL;
-    null_test->arg = eq_predicate->left;
-
-    // bool and predicate
-    auto bool_and = new Ra__Node__Bool_Predicate();
-    bool_and->bool_operator = RA__BOOL_OPERATOR__AND;
-    bool_and->args.push_back(eq_predicate);
-    bool_and->args.push_back(null_test);
-
-    // find subquery selection node, if exists, else create new selection node
-    Ra__Node** it = &subquery_root;
-    while((*it)->childNodes[0]->n_children==1){
-        it = &((*it)->childNodes[0]);
-        if((*it)->node_case==RA__NODE__SELECTION){
-            break;
-        }
-    }
-    if((*it)->node_case==RA__NODE__SELECTION){
-        auto sel = static_cast<Ra__Node__Selection*>(*it);
-        // add new predicates to original predicate
-        bool_and->args.push_back(sel->predicate);
-
-        // replace old selection predicate with new predicate
-        sel->predicate = bool_and;
-    }
-    // add selection if subquery has none
-    else{
-        Ra__Node__Selection* sel = new Ra__Node__Selection();
-        sel->predicate = bool_and;
-
-        sel->childNodes.push_back((*it)->childNodes[0]);
-        (*it)->childNodes[0] = sel;
-    }
+    //     sel->childNodes.push_back((*it)->childNodes[0]);
+    //     (*it)->childNodes[0] = sel;
+    // }
 
     join->childNodes.push_back(subquery_root);
     return join;
@@ -420,20 +385,21 @@ Ra__Node* SQLtoRA::parse_where_in_subquery(PgQuery__SubLink* sub_link, bool nega
 
 Ra__Node* SQLtoRA::parse_where_exists_subquery(PgQuery__SelectStmt* select_stmt, bool negated){
     Ra__Node* join;
+    uint64_t marker = ++counter;
     if(is_correlated_subquery(select_stmt)){
         if(negated){
-            join = new Ra__Node__Join(RA__JOIN__ANTI_LEFT_DEPENDENT);
+            join = new Ra__Node__Join(RA__JOIN__ANTI_LEFT_DEPENDENT,0,marker);
         }
         else{
-            join = new Ra__Node__Join(RA__JOIN__SEMI_LEFT_DEPENDENT);
+            join = new Ra__Node__Join(RA__JOIN__SEMI_LEFT_DEPENDENT,0,marker);
         }
     }
     else{
         if(negated){
-            join = new Ra__Node__Join(RA__JOIN__ANTI_LEFT);
+            join = new Ra__Node__Join(RA__JOIN__ANTI_LEFT,0,marker);
         }
         else{
-            join = new Ra__Node__Join(RA__JOIN__SEMI_LEFT);
+            join = new Ra__Node__Join(RA__JOIN__SEMI_LEFT,0,marker);
         }
     }
     
@@ -558,43 +524,45 @@ void SQLtoRA::find_where_expression_attributes(PgQuery__Node* node, std::vector<
     }
 }
 
+// case subquery: return marker
+// no more return nullptr
 Ra__Node* SQLtoRA::parse_where_expression(PgQuery__Node* node, Ra__Node* ra_selection, bool sublink_negated){
     switch(node->node_case){
         case PG_QUERY__NODE__NODE_BOOL_EXPR: {
             PgQuery__BoolExpr* expr = node->bool_expr;
 
-            std::vector<PgQuery__Node*> sublinks; // exists, in, all
-            std::vector<PgQuery__Node*> non_sublinks;
-            for(size_t i=0; i<expr->n_args; i++){
-                if(expr->args[i]->node_case==PG_QUERY__NODE__NODE_SUB_LINK){
-                    sublinks.push_back(expr->args[i]);
-                }
-                else{
-                    non_sublinks.push_back(expr->args[i]);
-                }
-            }
+            // std::vector<PgQuery__Node*> sublinks; // exists, in, all
+            // std::vector<PgQuery__Node*> non_sublinks;
+            // for(size_t i=0; i<expr->n_args; i++){
+            //     if(expr->args[i]->node_case==PG_QUERY__NODE__NODE_SUB_LINK){
+            //         sublinks.push_back(expr->args[i]);
+            //     }
+            //     else{
+            //         non_sublinks.push_back(expr->args[i]);
+            //     }
+            // }
 
-            // parse all sublinks
-            for(auto& sublink: sublinks){
-                // TODO: pass negation info to sublink parsing
-                if(expr->boolop==PG_QUERY__BOOL_EXPR_TYPE__NOT_EXPR){
-                    parse_where_expression(sublink, ra_selection, true);
-                }
-                else{
-                    parse_where_expression(sublink, ra_selection, false);
-                }
-            }
+            // // parse all sublinks
+            // for(auto& sublink: sublinks){
+            //     // TODO: pass negation info to sublink parsing
+            //     if(expr->boolop==PG_QUERY__BOOL_EXPR_TYPE__NOT_EXPR){
+            //         parse_where_expression(sublink, ra_selection, true);
+            //     }
+            //     else{
+            //         parse_where_expression(sublink, ra_selection, false);
+            //     }
+            // }
 
-            // parse all non-sublink expressions
-            if(non_sublinks.size()==0){
-                // if only sublinks, then selection has no predicate
-                return nullptr;
-            }
-            else if(non_sublinks.size()==1){
-                // if only one expression left, not a boolean expression anymore, return Ra__Node__Predicate
-                return parse_where_expression(non_sublinks[0], ra_selection);
-            }
-            else{
+            // // parse all non-sublink expressions
+            // if(non_sublinks.size()==0){
+            //     // if only sublinks, then selection has no predicate
+            //     return nullptr;
+            // }
+            // else if(non_sublinks.size()==1){
+            //     // if only one expression left, not a boolean expression anymore, return Ra__Node__Predicate
+            //     return parse_where_expression(non_sublinks[0], ra_selection);
+            // }
+            // else{
                 Ra__Node__Bool_Predicate* p = new Ra__Node__Bool_Predicate();
                 bool is_not = false;
                 switch(expr->boolop){
@@ -612,20 +580,20 @@ Ra__Node* SQLtoRA::parse_where_expression(PgQuery__Node* node, Ra__Node* ra_sele
                         break;
                     }
                 }
-                // for(size_t i=0; i<expr->n_args; i++){
-                //     Ra__Node* predicate =  parse_where_expression(expr->args[i], ra_selection, is_not);
-                //     if(predicate!=nullptr){
-                //         p->args.push_back(predicate);
-                //     }
-                // }
-                for(auto& non_sublink: non_sublinks){
-                    Ra__Node* predicate =  parse_where_expression(non_sublink, ra_selection);
+                for(size_t i=0; i<expr->n_args; i++){
+                    Ra__Node* predicate =  parse_where_expression(expr->args[i], ra_selection, is_not);
                     if(predicate!=nullptr){
                         p->args.push_back(predicate);
                     }
                 }
+                // for(auto& non_sublink: non_sublinks){
+                //     Ra__Node* predicate =  parse_where_expression(non_sublink, ra_selection);
+                //     if(predicate!=nullptr){
+                //         p->args.push_back(predicate);
+                //     }
+                // }
                 return p;
-            }
+            // }
         }
         case PG_QUERY__NODE__NODE_A_EXPR: {
             PgQuery__AExpr* a_expr = node->a_expr;
@@ -651,6 +619,7 @@ Ra__Node* SQLtoRA::parse_where_expression(PgQuery__Node* node, Ra__Node* ra_sele
                     p->binaryOperator = " between ";
                     break;
                 } 
+                // only covers in list (not subquery)
                 case PG_QUERY__A__EXPR__KIND__AEXPR_IN:{
                     std::string s(a_expr->name[0]->string->str);
                     // "in"
@@ -724,7 +693,7 @@ Ra__Node* SQLtoRA::parse_where_expression(PgQuery__Node* node, Ra__Node* ra_sele
                 // if both joins are dependent
                 if(left_subquery_join->node_case==RA__NODE__JOIN && right_subquery_join->node_case==RA__NODE__JOIN){
                     // give predicate to "higher" dependent join
-                    static_cast<Ra__Node__Join*>(left_subquery_join)->predicate = p;
+                    // static_cast<Ra__Node__Join*>(left_subquery_join)->predicate = p;
                     // left join added first, is higher
                     add_subtree(ra_selection, left_subquery_join);
                     add_subtree(ra_selection, right_subquery_join);
@@ -732,7 +701,7 @@ Ra__Node* SQLtoRA::parse_where_expression(PgQuery__Node* node, Ra__Node* ra_sele
                 // if left is dependent, right not
                 else if(left_subquery_join->node_case==RA__NODE__JOIN){
                     // add predicate to dependent join
-                    static_cast<Ra__Node__Join*>(left_subquery_join)->predicate = p;
+                    // static_cast<Ra__Node__Join*>(left_subquery_join)->predicate = p;
 
                     // first add dependent join, then cp
                     add_subtree(ra_selection, left_subquery_join);
@@ -741,22 +710,22 @@ Ra__Node* SQLtoRA::parse_where_expression(PgQuery__Node* node, Ra__Node* ra_sele
                 // if right is dependent, left not
                 else if(right_subquery_join->node_case==RA__NODE__JOIN){
                     // add predicate to dependent join
-                    static_cast<Ra__Node__Join*>(right_subquery_join)->predicate = p;
+                    // static_cast<Ra__Node__Join*>(right_subquery_join)->predicate = p;
                     
                     // first add dependent join, then cp
                     add_subtree(ra_selection, right_subquery_join);
                     add_subtree(ra_selection, left_subquery_join);
                 }
-                return nullptr;
+                return p;
             }
             // left is subquery
             else if(left_subquery_join!=nullptr){
                 // if dependent join, add predicate
                 if(left_subquery_join->node_case==RA__NODE__JOIN){
-                    static_cast<Ra__Node__Join*>(left_subquery_join)->predicate = p;
+                    // static_cast<Ra__Node__Join*>(left_subquery_join)->predicate = p;
                     // add cp/join to selection
                     add_subtree(ra_selection, left_subquery_join);
-                    return nullptr;
+                    return p;
                 }
                 else{
                     add_subtree(ra_selection, left_subquery_join);
@@ -767,39 +736,39 @@ Ra__Node* SQLtoRA::parse_where_expression(PgQuery__Node* node, Ra__Node* ra_sele
             else if(right_subquery_join!=nullptr){
                 // if dependent join, add predicate
                 if(right_subquery_join->node_case==RA__NODE__JOIN){
-                    static_cast<Ra__Node__Join*>(right_subquery_join)->predicate = p;
+                    // static_cast<Ra__Node__Join*>(right_subquery_join)->predicate = p;
                     // add cp/join to selection
                     add_subtree(ra_selection, right_subquery_join);
-                    return nullptr;
+                    return p;
                 }
                 else{
                     add_subtree(ra_selection, right_subquery_join);
                     return p;
                 }
             }
-            // no subqueries
-            else{
-                return p;
-            }
+            return p;
         }
         // for "Exists" and "In" subqueries
         case PG_QUERY__NODE__NODE_SUB_LINK: {
             // no predicate to return for selection, subquery is connected through join
             // add subquery to from
             PgQuery__SubLink* sub_link = node->sub_link;
+            Ra__Node* join = nullptr;
             switch(sub_link->sub_link_type){
                 case PG_QUERY__SUB_LINK_TYPE__EXISTS_SUBLINK:{
-                    add_subtree(ra_selection, parse_where_exists_subquery(sub_link->subselect->select_stmt, sublink_negated));
+                    join = parse_where_exists_subquery(sub_link->subselect->select_stmt, sublink_negated);
                     break;
                 }
                 // "in"
                 case PG_QUERY__SUB_LINK_TYPE__ANY_SUBLINK: {
-                    add_subtree(ra_selection, parse_where_in_subquery(sub_link, sublink_negated));
+                    join = parse_where_in_subquery(sub_link, sublink_negated);
                     break;
                 }
                 default: std::cout << "sublink type not supported" << std::endl;;
             }
-            return nullptr;
+            add_subtree(ra_selection,join);
+            // create predicate for in and exists
+            return static_cast<Ra__Node__Join*>(join)->right_where_subquery_marker;
         }
         case PG_QUERY__NODE__NODE_NULL_TEST:{
             PgQuery__NullTest* null_test = node->null_test;

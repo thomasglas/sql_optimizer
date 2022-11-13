@@ -20,7 +20,8 @@ class SQLtoRA{
         RaTree* parse(const char* query);
 
     private:
-        size_t counter = 1;
+        // to generate unique ids
+        uint64_t counter = 0;
 
         /// Root node of main relational algebra tree
         Ra__Node* ra_tree_root;

@@ -197,6 +197,9 @@ std::string RAtoSQL::deparse_predicate(Ra__Node* node){
                         if(arg->node_case==RA__NODE__BOOL_PREDICATE){
                             result += op + "(" + deparse_predicate(arg) + ")";
                         }
+                        else if(arg->node_case==RA__NODE__WHERE_SUBQUERY_MARKER && (static_cast<Ra__Node__Where_Subquery_Marker*>(arg)->type==RA__JOIN__ANTI_IN_LEFT || static_cast<Ra__Node__Where_Subquery_Marker*>(arg)->type==RA__JOIN__ANTI_IN_LEFT_DEPENDENT)){
+                            result += deparse_predicate(arg);
+                        }
                         else{
                             result += op + deparse_predicate(arg);
                         }
@@ -221,11 +224,73 @@ std::string RAtoSQL::deparse_predicate(Ra__Node* node){
 
             return str;
         }
+        case RA__NODE__WHERE_SUBQUERY_MARKER:{
+            auto marker = static_cast<Ra__Node__Where_Subquery_Marker*>(node);
+            // find join
+            Ra__Node** it = &(raTree->root);
+            assert(find_marker_subquery(it, marker));
+            // switch join case -> "exists", "in"
+            auto join = static_cast<Ra__Node__Join*>(*it);
+            Ra__Node* subquery = nullptr;
+            if(join->left_where_subquery_marker->marker == marker->marker){
+                subquery = join->childNodes[0];
+            }
+            else{
+                subquery = join->childNodes[1];
+            }
+            switch(join->type){
+                case RA__JOIN__SEMI_LEFT: 
+                case RA__JOIN__SEMI_LEFT_DEPENDENT:
+                case RA__JOIN__ANTI_LEFT: 
+                case RA__JOIN__ANTI_LEFT_DEPENDENT: {
+                    // exists
+                    return "exists (" + deparse_projection(subquery)+")";
+                }
+                case RA__JOIN__IN_LEFT:
+                case RA__JOIN__IN_LEFT_DEPENDENT:{
+                    // in
+                    Ra__Node__Predicate* p = static_cast<Ra__Node__Predicate*>(join->predicate);
+                    return deparse_expression(p->left) + " in (" + deparse_projection(subquery)+")";
+                }
+                case RA__JOIN__ANTI_IN_LEFT:
+                case RA__JOIN__ANTI_IN_LEFT_DEPENDENT:{
+                    // not in
+                    Ra__Node__Predicate* p = static_cast<Ra__Node__Predicate*>(join->predicate);
+                    return deparse_expression(p->left) + " not in (" + deparse_projection(subquery)+")";
+                }
+                default: return "("+deparse_projection(subquery)+")";
+            }
+            // deparse subquery
+            
+        }
         default: {
             Ra__Node__Expression* expression = static_cast<Ra__Node__Expression*>(node);
             return deparse_expression(expression);
         }
     }
+}
+
+bool RAtoSQL::find_marker_subquery(Ra__Node** it, Ra__Node__Where_Subquery_Marker* marker){
+    if((*it)->node_case==RA__NODE__JOIN){
+        auto join = static_cast<Ra__Node__Join*>(*it);
+        if(join->right_where_subquery_marker->marker==marker->marker || join->left_where_subquery_marker->marker==marker->marker){
+            return true;
+        }
+    }
+    
+    if((*it)->n_children == 0){
+        return false;
+    }
+
+    bool found = false;
+    std::vector<Ra__Node*> childNodes = (*it)->childNodes;
+    for(auto child: childNodes){
+        if(!found){
+            *it = child;
+            found = find_marker_subquery(it, marker);
+        }
+    }
+    return found;
 }
 
 std::string RAtoSQL::deparse_selection(Ra__Node* node){
@@ -311,6 +376,10 @@ void RAtoSQL::deparse_ra_node(Ra__Node* node, size_t layer,
             Ra__Node__Join* join = static_cast<Ra__Node__Join*>(node);
             // switch case join type
             assert(join->is_full());
+            if(static_cast<Ra__Node__Join*>(node)->right_where_subquery_marker->marker>0){
+                deparse_ra_node(join->childNodes[0], layer, select, where, from, group_by, having, order_by);
+                break;
+            }
             switch(join->type){
                 case RA__JOIN__CROSS_PRODUCT:{
                     deparse_ra_node(join->childNodes[0], layer, select, where, from, group_by, having, order_by);
@@ -322,17 +391,14 @@ void RAtoSQL::deparse_ra_node(Ra__Node* node, size_t layer,
                 case RA__JOIN__LEFT: 
                 case RA__JOIN__RIGHT: 
                 case RA__JOIN__DEPENDENT_INNER_LEFT:  {
-                    if(join->predicate==nullptr){
-                        deparse_ra_node(join->childNodes[0],layer, select, where, from, group_by, having, order_by);
-                        from += join->join_name();
-                        deparse_ra_node(join->childNodes[1],layer, select, where, from, group_by, having, order_by);
-                    }
-                    else{
-                        deparse_ra_node(join->childNodes[0],layer, select, where, from, group_by, having, order_by);
-                        from += join->join_name();
-                        deparse_ra_node(join->childNodes[1],layer, select, where, from, group_by, having, order_by);
+                    from += "(";
+                    deparse_ra_node(join->childNodes[0],layer, select, where, from, group_by, having, order_by);
+                    from += join->join_name();
+                    deparse_ra_node(join->childNodes[1],layer, select, where, from, group_by, having, order_by);
+                    if(join->predicate!=nullptr){
                         from +=  " on " + deparse_predicate(join->predicate);
                     }
+                    from += ")";
                     if(join->alias.length()>0){
                         from += " as " + join->alias; 
                     } 
@@ -347,30 +413,12 @@ void RAtoSQL::deparse_ra_node(Ra__Node* node, size_t layer,
                     };
                     break;
                 }
-                // SJ -> exists 
+                // exists, not exists
                 case RA__JOIN__SEMI_LEFT: 
-                case RA__JOIN__SEMI_LEFT_DEPENDENT: {
-                    deparse_ra_node(node->childNodes[0],layer, select, where, from, group_by, having, order_by);
-                    if(where.length()>0){
-                        where += " and ";
-                    }
-                    where += "exists (";
-                    where += deparse_projection(node->childNodes[1]);
-                    where += ")";
-                    break;
-                }
-                // AJ -> not exists
+                case RA__JOIN__SEMI_LEFT_DEPENDENT:
                 case RA__JOIN__ANTI_LEFT: 
-                case RA__JOIN__ANTI_RIGHT: 
-                case RA__JOIN__ANTI_LEFT_DEPENDENT: 
-                case RA__JOIN__ANTI_RIGHT_DEPENDENT: {
-                    deparse_ra_node(node->childNodes[0],layer, select, where, from, group_by, having, order_by);
-                    if(where.length()>0){
-                        where += " and ";
-                    }
-                    where += "not exists (";
-                    where += deparse_projection(node->childNodes[1]);
-                    where += ")";
+                case RA__JOIN__ANTI_LEFT_DEPENDENT: {
+                    std::cout << "Right subquery should have marker" << std::endl;
                     break;
                 }
                 default: std::cout << "Join type not supported in decorrelation" << std::endl;

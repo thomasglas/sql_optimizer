@@ -32,6 +32,7 @@ typedef enum {
     RA__NODE__VALUES = 22,
     RA__NODE__NULL_TEST = 23,
     RA__NODE__IN_LIST = 24,
+    RA__NODE__WHERE_SUBQUERY_MARKER = 25
 } Ra__Node__NodeCase;
 
 typedef enum {
@@ -63,20 +64,22 @@ typedef enum {
 } Ra__Const_DataType__DataType;
 
 typedef enum {
-    RA__JOIN__CROSS_PRODUCT = 13,
-    RA__JOIN__INNER = 0,
-    RA__JOIN__DEPENDENT_INNER_LEFT = 1,
-    RA__JOIN__DEPENDENT_INNER_RIGHT = 2,
-    RA__JOIN__LEFT = 3,
-    RA__JOIN__RIGHT = 4,
-    RA__JOIN__SEMI_LEFT = 5,
-    RA__JOIN__SEMI_RIGHT = 6,
-    RA__JOIN__SEMI_LEFT_DEPENDENT = 7,
-    RA__JOIN__SEMI_RIGHT_DEPENDENT = 8,
-    RA__JOIN__ANTI_LEFT = 9,
-    RA__JOIN__ANTI_RIGHT = 10,
+    RA__JOIN__CROSS_PRODUCT = 0,
+    RA__JOIN__INNER = 1,
+    RA__JOIN__DEPENDENT_INNER_LEFT = 2,
+    RA__JOIN__DEPENDENT_INNER_RIGHT = 3,
+    RA__JOIN__LEFT = 4,
+    RA__JOIN__RIGHT = 5,
+    RA__JOIN__SEMI_LEFT = 6,
+    RA__JOIN__SEMI_RIGHT = 7,
+    RA__JOIN__SEMI_LEFT_DEPENDENT = 8,
+    RA__JOIN__SEMI_RIGHT_DEPENDENT = 9,
+    RA__JOIN__ANTI_LEFT = 10,
     RA__JOIN__ANTI_LEFT_DEPENDENT = 11,
-    RA__JOIN__ANTI_RIGHT_DEPENDENT = 12,
+    RA__JOIN__IN_LEFT = 13,
+    RA__JOIN__IN_LEFT_DEPENDENT = 14,
+    RA__JOIN__ANTI_IN_LEFT = 15,
+    RA__JOIN__ANTI_IN_LEFT_DEPENDENT = 16
 } Ra__Join__JoinType;
 
 typedef enum {
@@ -118,6 +121,7 @@ class Ra__Node__Having;
 class Ra__Node__Select_Expression;
 class Ra__Node__Case_When;
 class Ra__Node__Case_Expr;
+class Ra__Node__Where_Subquery_Marker;
 
 class Ra__Node{
     public:
@@ -132,7 +136,7 @@ class Ra__Node{
 
 class Ra__Node__Join: public Ra__Node{
     public:
-        Ra__Node__Join(Ra__Join__JoinType _type);
+        Ra__Node__Join(Ra__Join__JoinType _type, uint64_t l_marker=0, uint64_t r_marker=0);
         ~Ra__Node__Join();
         std::string to_string();
         std::string join_name();
@@ -141,6 +145,17 @@ class Ra__Node__Join: public Ra__Node{
         Ra__Join__JoinType type;
         std::string alias;
         std::vector<std::string> columns;
+
+        Ra__Node__Where_Subquery_Marker* left_where_subquery_marker;
+        Ra__Node__Where_Subquery_Marker* right_where_subquery_marker;
+};
+
+class Ra__Node__Where_Subquery_Marker: public Ra__Node {
+    public:
+        Ra__Node__Where_Subquery_Marker(uint64_t _marker, Ra__Join__JoinType _type);
+        std::string to_string();
+        uint64_t marker;
+        Ra__Join__JoinType type;
 };
 
 class Ra__Node__Projection: public Ra__Node {

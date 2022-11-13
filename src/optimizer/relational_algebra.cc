@@ -14,8 +14,8 @@ bool Ra__Node::is_full(){
     return n_children == childNodes.size();
 }
 
-Ra__Node__Join::Ra__Node__Join(Ra__Join__JoinType _type)
-: type(_type)
+Ra__Node__Join::Ra__Node__Join(Ra__Join__JoinType _type, uint64_t l_marker, uint64_t r_marker)
+: type(_type),left_where_subquery_marker(new Ra__Node__Where_Subquery_Marker(l_marker,_type)),right_where_subquery_marker(new Ra__Node__Where_Subquery_Marker(r_marker,_type))
 {
     node_case = Ra__Node__NodeCase::RA__NODE__JOIN;
     n_children = 2;
@@ -41,9 +41,11 @@ std::string Ra__Node__Join::to_string(){
         case RA__JOIN__SEMI_LEFT_DEPENDENT: op = "SLDJ"; break;
         case RA__JOIN__SEMI_RIGHT_DEPENDENT: op = "SRDJ"; break;
         case RA__JOIN__ANTI_LEFT: op = "ALJ"; break;
-        case RA__JOIN__ANTI_RIGHT: op = "ARJ"; break;
         case RA__JOIN__ANTI_LEFT_DEPENDENT: op = "ALDJ"; break;
-        case RA__JOIN__ANTI_RIGHT_DEPENDENT: op = "ARDJ"; break;
+        case RA__JOIN__IN_LEFT: op = "ILJ"; break;
+        case RA__JOIN__IN_LEFT_DEPENDENT: op = "ILDJ"; break;
+        case RA__JOIN__ANTI_IN_LEFT: op = "AILJ"; break;
+        case RA__JOIN__ANTI_IN_LEFT_DEPENDENT: op = "AILDJ"; break;
         default: op = "join op not supported";
     }
     return "(" + childNodes[0]->to_string() + ")"+op+"(" + childNodes[1]->to_string() + ")";
@@ -330,6 +332,16 @@ Ra__Node__Null_Test::Ra__Node__Null_Test(){
 
 Ra__Node__Null_Test::~Ra__Node__Null_Test(){
     delete arg;
+}
+
+Ra__Node__Where_Subquery_Marker::Ra__Node__Where_Subquery_Marker(uint64_t _marker, Ra__Join__JoinType _type)
+:marker(_marker), type(_type){
+    node_case = Ra__Node__NodeCase::RA__NODE__WHERE_SUBQUERY_MARKER;
+}
+
+std::string Ra__Node__Where_Subquery_Marker::to_string()
+{
+    return std::to_string(marker);
 }
 
 Ra__Node__Dummy::Ra__Node__Dummy(){

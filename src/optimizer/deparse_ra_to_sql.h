@@ -98,6 +98,15 @@ class RAtoSQL{
          * @return expression as SQL string
          */
         std::string deparse_expression(Ra__Node* arg);
+
+        /**
+         * Finds the join with corresponding subquery marker, sets it = join when found
+         * 
+         * @param it pointer to node to search
+         * @param marker the marker to be found
+         * @return if marker is found
+         */
+        bool find_marker_subquery(Ra__Node** it, Ra__Node__Where_Subquery_Marker* marker);
 };
 
 #endif
