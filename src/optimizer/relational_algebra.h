@@ -67,13 +67,9 @@ typedef enum {
     RA__JOIN__CROSS_PRODUCT = 0,
     RA__JOIN__INNER = 1,
     RA__JOIN__DEPENDENT_INNER_LEFT = 2,
-    RA__JOIN__DEPENDENT_INNER_RIGHT = 3,
     RA__JOIN__LEFT = 4,
-    RA__JOIN__RIGHT = 5,
     RA__JOIN__SEMI_LEFT = 6,
-    RA__JOIN__SEMI_RIGHT = 7,
     RA__JOIN__SEMI_LEFT_DEPENDENT = 8,
-    RA__JOIN__SEMI_RIGHT_DEPENDENT = 9,
     RA__JOIN__ANTI_LEFT = 10,
     RA__JOIN__ANTI_LEFT_DEPENDENT = 11,
     RA__JOIN__IN_LEFT = 13,
@@ -107,6 +103,7 @@ typedef enum {
 
 class Ra__Node;
 class Ra__Node__Projection;
+class Ra__Node__Join;
 class Ra__Node__Selection;
 class Ra__Node__Relation;
 class Ra__Node__Rename;
@@ -136,7 +133,7 @@ class Ra__Node{
 
 class Ra__Node__Join: public Ra__Node{
     public:
-        Ra__Node__Join(Ra__Join__JoinType _type, uint64_t l_marker=0, uint64_t r_marker=0);
+        Ra__Node__Join(Ra__Join__JoinType _type, uint64_t r_marker=0);
         ~Ra__Node__Join();
         std::string to_string();
         std::string join_name();
@@ -146,7 +143,6 @@ class Ra__Node__Join: public Ra__Node{
         std::string alias;
         std::vector<std::string> columns;
 
-        Ra__Node__Where_Subquery_Marker* left_where_subquery_marker;
         Ra__Node__Where_Subquery_Marker* right_where_subquery_marker;
 };
 
@@ -156,6 +152,9 @@ class Ra__Node__Where_Subquery_Marker: public Ra__Node {
         std::string to_string();
         uint64_t marker;
         Ra__Join__JoinType type;
+        bool operator==(const Ra__Node__Where_Subquery_Marker& other) {
+            return marker == other.marker;
+        }
 };
 
 class Ra__Node__Projection: public Ra__Node {

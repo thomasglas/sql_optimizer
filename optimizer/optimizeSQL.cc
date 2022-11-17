@@ -48,14 +48,15 @@ std::vector<const char*> tests = {
 };
 
 std::vector<const char*> tests_correlated = {
-  "select s.name from students s where s.id = (select min(id) from students where semester=s.semester)", 
+  // "select s.name from students s where s.id = (select min(id) from students where semester=s.semester)", 
   "select s.name from students s where exists (select * from exams e where s.id=e.sid)",
-  "select s.name from students s where not exists (select * from exams e where s.id=e.sid)",
-  "select s.name from students s where s.id in (select e.sid from exams e)",
-  "select s.name from students s where s.id in (select e.sid from exams e where e.grade=1.0)",
-  "select s.name from students s where s.id not in (select e.sid from exams e where e.grade=1.0)",
-  "select s.name from students s where s.id in ('a','b','c')",
-  "select s.name from students s where s.id not in ('a','b','c')",
+  "select s.name from students s where exists (select * from exams e where s.id=e.sid and e.grade=1)",
+  // "select s.name from students s where not exists (select * from exams e where s.id=e.sid)",
+  // "select s.name from students s where s.id in (select e.sid from exams e)",
+  // "select s.name from students s where s.id in (select e.sid from exams e where e.grade=1.0)",
+  // "select s.name from students s where s.id not in (select e.sid from exams e where e.grade=1.0)",
+  // "select s.name from students s where s.id in ('a','b','c')",
+  // "select s.name from students s where s.id not in ('a','b','c')",
 };
   
 std::vector<const char*> Q1Q2 = {
@@ -65,15 +66,15 @@ std::vector<const char*> Q1Q2 = {
 
 
 std::vector<const char*> tpch_correlated = {
-  /*Q2*/ "select s_acctbal, s_name, n_name, p_partkey, p_mfgr, s_address, s_phone, s_comment from part, supplier, partsupp, nation, region where p_partkey=ps_partkey and s_suppkey=ps_suppkey and p_size=15 and p_type like '%BRASS' and s_nationkey=n_nationkey and n_regionkey=r_regionkey and r_name='EUROPE' and ps_supplycost=(select min(ps_supplycost) from partsupp, supplier, nation, region where p_partkey=ps_partkey and s_suppkey=ps_suppkey and s_nationkey=n_nationkey and n_regionkey=r_regionkey and r_name='EUROPE') order by s_acctbal desc, n_name, s_name, p_partkey",
+  // /*Q2*/ "select s_acctbal, s_name, n_name, p_partkey, p_mfgr, s_address, s_phone, s_comment from part, supplier, partsupp, nation, region where p_partkey=ps_partkey and s_suppkey=ps_suppkey and p_size=15 and p_type like '%BRASS' and s_nationkey=n_nationkey and n_regionkey=r_regionkey and r_name='EUROPE' and ps_supplycost=(select min(ps_supplycost) from partsupp, supplier, nation, region where p_partkey=ps_partkey and s_suppkey=ps_suppkey and s_nationkey=n_nationkey and n_regionkey=r_regionkey and r_name='EUROPE') order by s_acctbal desc, n_name, s_name, p_partkey",
   /*Q4*/ "select o_orderpriority, count(*) as order_count from orders where o_orderdate>=date '1993-07-01' and o_orderdate < date '1993-07-01'+interval '3' month and exists (select * from lineitem where l_orderkey=o_orderkey and l_commitdate<l_receiptdate ) group by o_orderpriority order by o_orderpriority",
-  /*Q12*/ "select l_shipmode, sum(case when o_orderpriority = '1-URGENT' or o_orderpriority = '2-HIGH' then 1 else 0 end) as high_line_count, sum(case when o_orderpriority <> '1-URGENT' and o_orderpriority <> '2-HIGH' then 1 else 0 end) as low_line_count from orders, lineitem where o_orderkey = l_orderkey and l_shipmode in ('MAIL', 'SHIP') and l_commitdate < l_receiptdate and l_shipdate < l_commitdate and l_receiptdate >= date '1994-01-01' and l_receiptdate < date '1994-01-01' + interval '1' year group by l_shipmode order by l_shipmode",
-  /*Q16*/ "select p_brand, p_type, p_size, count(distinct ps_suppkey) as supplier_cnt from partsupp, part where p_partkey = ps_partkey and p_brand <> 'Brand#45' and p_type not like 'MEDIUM POLISHED%' and p_size in (49, 14, 23, 45, 19, 3, 36, 9) and ps_suppkey not in ( select s_suppkey from supplier where s_comment like '%Customer%Complaints%' ) group by p_brand, p_type, p_size order by supplier_cnt desc, p_brand, p_type, p_size",
-  /*Q17*/ "select sum(l_extendedprice)/7.0 as avg_yearly from lineitem, part where p_partkey=l_partkey and p_brand='Brand#23' and p_container='MED BOX' and l_quantity<(select 0.2 * avg(l_quantity) from lineitem where l_partkey=p_partkey)",
-  /*Q18*/ "select c_name, c_custkey, o_orderkey, o_orderdate, o_totalprice, sum(l_quantity) from customer, orders, lineitem where o_orderkey in ( select l_orderkey from lineitem group by l_orderkey having sum(l_quantity) > 300 ) and c_custkey = o_custkey and o_orderkey = l_orderkey group by c_name, c_custkey, o_orderkey, o_orderdate, o_totalprice order by o_totalprice desc, o_orderdate",
-  /*Q19*/ "select sum(l_extendedprice* (1 - l_discount)) as revenue from lineitem, part where ( p_partkey = l_partkey and p_brand = 'Brand#12' and p_container in ('SM CASE', 'SM BOX', 'SM PACK', 'SM PKG') and l_quantity >= 1 and l_quantity <= 1 + 10 and p_size between 1 and 5 and l_shipmode in ('AIR', 'AIR REG') and l_shipinstruct = 'DELIVER IN PERSON' ) or ( p_partkey = l_partkey and p_brand = 'Brand#23' and p_container in ('MED BAG', 'MED BOX', 'MED PKG', 'MED PACK') and l_quantity >= 10 and l_quantity <= 10 + 10 and p_size between 1 and 10 and l_shipmode in ('AIR', 'AIR REG') and l_shipinstruct = 'DELIVER IN PERSON' ) or ( p_partkey = l_partkey and p_brand = 'Brand#34' and p_container in ('LG CASE', 'LG BOX', 'LG PACK', 'LG PKG') and l_quantity >= 20 and l_quantity <= 20 + 10 and p_size between 1 and 15 and l_shipmode in ('AIR', 'AIR REG') and l_shipinstruct = 'DELIVER IN PERSON' )",
-  /*Q20*/ "select s_name, s_address from supplier, nation where s_suppkey in (select ps_suppkey from partsupp where ps_partkey in (select p_partkey from part where p_name like 'forest%') and ps_availqty>(select 0.5*sum(l_quantity) from lineitem where l_partkey=ps_partkey and l_suppkey=ps_suppkey and l_shipdate>=date '1994-01-01' and l_shipdate<date '1994-01-01'+interval '1' year)) and s_nationkey=n_nationkey and n_name='CANADA' order by s_name",
-  /*Q21*/ "select s_name, count(*) as numwait from supplier, lineitem l1, orders, nation where s_suppkey=l1.l_suppkey and o_orderkey=l1.l_orderkey and o_orderstatus='F' and l1.l_receiptdate>l1.l_commitdate and exists (select * from lineitem l2 where l2.l_orderkey=l1.l_orderkey and l2.l_suppkey<>l1.l_suppkey) and not exists (select * from lineitem l3 where l3.l_orderkey=l1.l_orderkey and l3.l_suppkey<>l1.l_suppkey and l3.l_receiptdate>l3.l_commitdate) and s_nationkey=n_nationkey and n_name='SAUDI ARABIA' group by s_name order by numwait desc, s_name",
+  // /*Q12*/ "select l_shipmode, sum(case when o_orderpriority = '1-URGENT' or o_orderpriority = '2-HIGH' then 1 else 0 end) as high_line_count, sum(case when o_orderpriority <> '1-URGENT' and o_orderpriority <> '2-HIGH' then 1 else 0 end) as low_line_count from orders, lineitem where o_orderkey = l_orderkey and l_shipmode in ('MAIL', 'SHIP') and l_commitdate < l_receiptdate and l_shipdate < l_commitdate and l_receiptdate >= date '1994-01-01' and l_receiptdate < date '1994-01-01' + interval '1' year group by l_shipmode order by l_shipmode",
+  // /*Q16*/ "select p_brand, p_type, p_size, count(distinct ps_suppkey) as supplier_cnt from partsupp, part where p_partkey = ps_partkey and p_brand <> 'Brand#45' and p_type not like 'MEDIUM POLISHED%' and p_size in (49, 14, 23, 45, 19, 3, 36, 9) and ps_suppkey not in ( select s_suppkey from supplier where s_comment like '%Customer%Complaints%' ) group by p_brand, p_type, p_size order by supplier_cnt desc, p_brand, p_type, p_size",
+  // /*Q17*/ "select sum(l_extendedprice)/7.0 as avg_yearly from lineitem, part where p_partkey=l_partkey and p_brand='Brand#23' and p_container='MED BOX' and l_quantity<(select 0.2 * avg(l_quantity) from lineitem where l_partkey=p_partkey)",
+  // /*Q18*/ "select c_name, c_custkey, o_orderkey, o_orderdate, o_totalprice, sum(l_quantity) from customer, orders, lineitem where o_orderkey in ( select l_orderkey from lineitem group by l_orderkey having sum(l_quantity) > 300 ) and c_custkey = o_custkey and o_orderkey = l_orderkey group by c_name, c_custkey, o_orderkey, o_orderdate, o_totalprice order by o_totalprice desc, o_orderdate",
+  // /*Q19*/ "select sum(l_extendedprice* (1 - l_discount)) as revenue from lineitem, part where ( p_partkey = l_partkey and p_brand = 'Brand#12' and p_container in ('SM CASE', 'SM BOX', 'SM PACK', 'SM PKG') and l_quantity >= 1 and l_quantity <= 1 + 10 and p_size between 1 and 5 and l_shipmode in ('AIR', 'AIR REG') and l_shipinstruct = 'DELIVER IN PERSON' ) or ( p_partkey = l_partkey and p_brand = 'Brand#23' and p_container in ('MED BAG', 'MED BOX', 'MED PKG', 'MED PACK') and l_quantity >= 10 and l_quantity <= 10 + 10 and p_size between 1 and 10 and l_shipmode in ('AIR', 'AIR REG') and l_shipinstruct = 'DELIVER IN PERSON' ) or ( p_partkey = l_partkey and p_brand = 'Brand#34' and p_container in ('LG CASE', 'LG BOX', 'LG PACK', 'LG PKG') and l_quantity >= 20 and l_quantity <= 20 + 10 and p_size between 1 and 15 and l_shipmode in ('AIR', 'AIR REG') and l_shipinstruct = 'DELIVER IN PERSON' )",
+  // /*Q20*/ "select s_name, s_address from supplier, nation where s_suppkey in (select ps_suppkey from partsupp where ps_partkey in (select p_partkey from part where p_name like 'forest%') and ps_availqty>(select 0.5*sum(l_quantity) from lineitem where l_partkey=ps_partkey and l_suppkey=ps_suppkey and l_shipdate>=date '1994-01-01' and l_shipdate<date '1994-01-01'+interval '1' year)) and s_nationkey=n_nationkey and n_name='CANADA' order by s_name",
+  // /*Q21*/ "select s_name, count(*) as numwait from supplier, lineitem l1, orders, nation where s_suppkey=l1.l_suppkey and o_orderkey=l1.l_orderkey and o_orderstatus='F' and l1.l_receiptdate>l1.l_commitdate and exists (select * from lineitem l2 where l2.l_orderkey=l1.l_orderkey and l2.l_suppkey<>l1.l_suppkey) and not exists (select * from lineitem l3 where l3.l_orderkey=l1.l_orderkey and l3.l_suppkey<>l1.l_suppkey and l3.l_receiptdate>l3.l_commitdate) and s_nationkey=n_nationkey and n_name='SAUDI ARABIA' group by s_name order by numwait desc, s_name",
   /*Q22*/ "select cntrycode, count(*) as numcust, sum(c_acctbal) as totacctbal from (select substring(c_phone from 1 for 2) as cntrycode, c_acctbal from customer where substring(c_phone from 1 for 2) in ('13','31','23','29','30','18','17') and c_acctbal>(select avg(c_acctbal) from customer where c_acctbal>0.00 and substring (c_phone from 1 for 2) in ('13','31','23','29','30','18','17')) and not exists (select * from orders where o_custkey=c_custkey)) as custsale group by cntrycode order by cntrycode",
 };
 
@@ -126,6 +127,7 @@ void run_tests_correlated(){
   for(auto test: tests_correlated){
     SQLtoRA* sql_to_ra = new SQLtoRA();
     RaTree* raTree = sql_to_ra->parse(test);
+    raTree->optimize();
     std::cout << raTree->root->to_string() << "\n" << std::endl;
     RAtoSQL* ra_to_sql = new RAtoSQL(raTree);
     std::string sql = ra_to_sql->deparse();
@@ -142,11 +144,12 @@ void run_q1q2(){
   }
 }
 
-void run_tpch(){
+void run_tpch_correlated(){
   std::cout << "\n===== TPCH tests =====" << std::endl;
   for(auto test: tpch_correlated){
     SQLtoRA* sql_to_ra = new SQLtoRA();
     RaTree* raTree = sql_to_ra->parse(test);
+    raTree->optimize();
     std::cout << raTree->root->to_string() << "\n" << std::endl;
     RAtoSQL* ra_to_sql = new RAtoSQL(raTree);
     std::string sql = ra_to_sql->deparse();
@@ -179,7 +182,7 @@ int main() {
   // run_tests();
   // run_tests_correlated();
   // run_q1q2();
-  run_tpch();
+  run_tpch_correlated();
   // run_tpch_uncorrelated();
   // parse_json();
   // Optional, this ensures all memory is freed upon program exit (useful when running Valgrind)

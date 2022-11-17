@@ -14,8 +14,8 @@ bool Ra__Node::is_full(){
     return n_children == childNodes.size();
 }
 
-Ra__Node__Join::Ra__Node__Join(Ra__Join__JoinType _type, uint64_t l_marker, uint64_t r_marker)
-: type(_type),left_where_subquery_marker(new Ra__Node__Where_Subquery_Marker(l_marker,_type)),right_where_subquery_marker(new Ra__Node__Where_Subquery_Marker(r_marker,_type))
+Ra__Node__Join::Ra__Node__Join(Ra__Join__JoinType _type, uint64_t r_marker)
+: type(_type),right_where_subquery_marker(new Ra__Node__Where_Subquery_Marker(r_marker,_type))
 {
     node_case = Ra__Node__NodeCase::RA__NODE__JOIN;
     n_children = 2;
@@ -33,13 +33,9 @@ std::string Ra__Node__Join::to_string(){
         case RA__JOIN__CROSS_PRODUCT: op = "X"; break;
         case RA__JOIN__INNER: op = "J"; break;
         case RA__JOIN__LEFT: op = "LJ"; break;
-        case RA__JOIN__RIGHT: op = "RJ"; break;
         case RA__JOIN__DEPENDENT_INNER_LEFT: op = "LDJ"; break;
-        case RA__JOIN__DEPENDENT_INNER_RIGHT: op = "RDJ"; break;
         case RA__JOIN__SEMI_LEFT: op = "SLJ"; break;
-        case RA__JOIN__SEMI_RIGHT: op = "SRJ"; break;
         case RA__JOIN__SEMI_LEFT_DEPENDENT: op = "SLDJ"; break;
-        case RA__JOIN__SEMI_RIGHT_DEPENDENT: op = "SRDJ"; break;
         case RA__JOIN__ANTI_LEFT: op = "ALJ"; break;
         case RA__JOIN__ANTI_LEFT_DEPENDENT: op = "ALDJ"; break;
         case RA__JOIN__IN_LEFT: op = "ILJ"; break;
@@ -53,11 +49,9 @@ std::string Ra__Node__Join::to_string(){
 
 std::string Ra__Node__Join::join_name(){
     switch(type){
-        case RA__JOIN__DEPENDENT_INNER_RIGHT:
         case RA__JOIN__DEPENDENT_INNER_LEFT:
         case RA__JOIN__INNER: return " join ";
         case RA__JOIN__LEFT: return " left join ";
-        case RA__JOIN__RIGHT: return " right join ";
         default: return " join op not supported ";
     }
 }

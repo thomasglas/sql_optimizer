@@ -1,0 +1,18 @@
+Q1:
+select s.name,e.course
+from students s,exams e
+where s.id=e.sid and
+    e.grade=(select min(e2.grade)
+        from exams e2
+        where s.id=e2.sid)
+
+Q2:
+select s.name, e.course
+from students s, exams e
+where s.id=e.sid and
+    (s.major = 'CS' or s.major = 'Games Eng') and
+    e.grade>=(select avg(e2.grade)+1
+        from exams e2
+        where s.id=e2.sid or 
+            (e2.curriculum=s.major and
+            s.year>e2.date))

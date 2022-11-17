@@ -1,0 +1,270 @@
+Q1':
+select s.name,e.course
+from students s,exams e,
+    (select e2.sid as id, min(e2.grade) as best
+    from exams e2
+    group by e2.sid) m
+where s.id=e.sid and m.id=s.id and
+    e.grade=m.best
+
+Q2':
+with students (name,id,major,year) as(
+        select *
+        from (VALUES 
+                ('Thomas',1,'CS',10), 
+                ('Thomas2',2,'CS',11), 
+                ('Thomas3',3,'CS',11), 
+                ('Thomas4',4,'CS',11), 
+                ('Thomas5',5,'Games Eng',11)
+        )
+),
+exams (sid,date,grade,curriculum,course) as(
+        select *
+        from (VALUES 
+                (1,10,1,'CS','FDE'),
+                (2,10,2,'CS','FDE'),
+                (3,10,3,'CS','FDE'),
+                (4,10,1,'CS','FDE'),
+                (5,10,2,'CS','FDE')
+        )
+)
+select distinct s.name, e.course
+from students s, exams e,
+        (select s2.id, s2.year, s2.major, avg(e2.grade) as avg
+        from exams e2, students s2
+        where e2.sid=s2.id or (e2.curriculum=s2.major and s2.year>e2.date)
+        group by s2.id, s2.year, s2.major
+    ) m
+where s.id=e.sid and
+    (s.major = 'CS' or s.major = 'Games Eng') and
+    e.grade>=m.avg+1 and
+    (m.id=s.id or (m.year>e.date and
+        e.curriculum=m.major))
+
+
+-- TPC-H Query 2
+select
+        s_acctbal,
+        s_name,
+        n_name,
+        p_partkey,
+        p_mfgr,
+        s_address,
+        s_phone,
+        s_comment
+from
+        part,
+        supplier,
+        partsupp ps,
+        nation,
+        region,
+        (
+                select
+                        min(ps_supplycost) as min_, ps_partkey
+                from
+                        partsupp,
+                        supplier,
+                        nation,
+                        region
+                where   s_suppkey = ps_suppkey
+                        and s_nationkey = n_nationkey
+                        and n_regionkey = r_regionkey
+                        and r_name = 'EUROPE'
+                group by ps_partkey
+        ) as m
+where
+        p_partkey = ps.ps_partkey
+        and s_suppkey = ps_suppkey
+        and p_size = 15
+        and p_type like '%BRASS'
+        and s_nationkey = n_nationkey
+        and n_regionkey = r_regionkey
+        and r_name = 'EUROPE'
+        and p_partkey = m.ps_partkey
+        and ps_supplycost = m.min_
+order by
+        s_acctbal desc,
+        n_name,
+        s_name,
+        p_partkey
+limit
+        100
+
+
+-- TPC-H Query 4
+select
+        o_orderpriority,
+        count(*) as order_count
+from
+        orders
+where
+        o_orderdate >= date '1993-07-01'
+        and o_orderdate < date '1993-07-01' + interval '3' month
+        and o_orderkey in  (
+                select l_orderkey
+                from
+                        lineitem
+                where
+                        l_commitdate < l_receiptdate
+        )
+group by
+        o_orderpriority
+order by
+        o_orderpriority
+
+
+-- TPC-H Query 17
+select
+        sum(l_extendedprice) / 7.0 as avg_yearly
+from
+        lineitem l1,
+        part,
+        (
+                select
+                        0.2 * avg(l_quantity) avg_, l_partkey
+                from
+                        lineitem
+                group by l_partkey
+        ) as m
+where
+        p_partkey = l1.l_partkey
+        and p_brand = 'Brand#23'
+        and p_container = 'MED BOX'
+        and p_partkey = m.l_partkey
+        and l_quantity < avg_
+
+
+-- TPC-H Query 20
+select
+        s_name,
+        s_address
+from
+        supplier,
+        nation
+where
+        s_suppkey in (
+                select
+                        ps_suppkey
+                from
+                        partsupp,
+                        (
+                                select
+                                        0.5 * sum(l_quantity) sum_, l_partkey, l_suppkey
+                                from
+                                        lineitem
+                                where
+                                        l_shipdate >= date '1994-01-01'
+                                        and l_shipdate < date '1994-01-01' + interval '1' year
+                                group by l_partkey, l_suppkey
+                        )
+                where
+                        ps_partkey in (
+                                select
+                                        p_partkey
+                                from
+                                        part
+                                where
+                                        p_name like 'forest%'
+                        )
+                        and ps_partkey = l_partkey
+                        and ps_suppkey = l_suppkey
+                        and ps_availqty > sum_
+        )
+        and s_nationkey = n_nationkey
+        and n_name = 'CANADA'
+order by
+        s_name
+
+
+-- TPC-H Query 21
+with m(l_orderkey, l_suppkey) as(
+        select
+                l_orderkey, l_suppkey
+        from
+                lineitem l2
+        group by l2.l_orderkey, l2.l_suppkey
+), m2(l_orderkey, l_suppkey) as (
+        select
+                l3.l_orderkey, l3.l_suppkey
+        from
+                lineitem l3
+        where
+                l3.l_receiptdate > l3.l_commitdate
+        group by l3.l_orderkey, l3.l_suppkey
+)
+
+select
+        s_name,
+        count(*) as numwait
+from
+        supplier,
+        lineitem l1,
+        orders,
+        nation
+where
+        s_suppkey = l1.l_suppkey
+        and o_orderkey = l1.l_orderkey
+        and o_orderstatus = 'F'
+        and l1.l_receiptdate > l1.l_commitdate
+        and exists (
+                select *
+                from m
+                where 
+                        l1.l_orderkey = m.l_orderkey
+                        and l1.l_suppkey <> m.l_suppkey
+        )
+        and not exists (
+                select *
+                from m2
+                where
+                        m2.l_orderkey = l1.l_orderkey
+                        and m2.l_suppkey <> l1.l_suppkey
+        )
+        and s_nationkey = n_nationkey
+        and n_name = 'SAUDI ARABIA'
+group by
+        s_name
+order by
+        numwait desc,
+        s_name
+limit
+        100
+
+
+-- TPC-H Query 22
+select
+        cntrycode,
+        count(*) as numcust,
+        sum(c_acctbal) as totacctbal
+from
+        (
+                select
+                        substring(c_phone from 1 for 2) as cntrycode,
+                        c_acctbal
+                from
+                        customer
+                where
+                        substring(c_phone from 1 for 2) in
+                                ('13', '31', '23', '29', '30', '18', '17')
+                        and c_acctbal > (
+                                select
+                                        avg(c_acctbal)
+                                from
+                                        customer
+                                where
+                                        c_acctbal > 0.00
+                                        and substring(c_phone from 1 for 2) in
+                                                ('13', '31', '23', '29', '30', '18', '17')
+                        )
+                        and c_custkey not in (
+                                select
+                                        o_custkey
+                                from
+                                        orders
+                        )
+        ) as custsale
+group by
+        cntrycode
+order by
+        cntrycode
+

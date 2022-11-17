@@ -270,10 +270,10 @@ Ra__Node* SQLtoRA::parse_where_subquery(PgQuery__SelectStmt* select_stmt, Ra__No
     Ra__Node* join;
     uint64_t marker = ++counter;
     if(is_correlated_subquery(select_stmt)){
-        join = new Ra__Node__Join(RA__JOIN__DEPENDENT_INNER_LEFT,0,marker);
+        join = new Ra__Node__Join(RA__JOIN__DEPENDENT_INNER_LEFT,marker);
     }
     else{
-        join = new Ra__Node__Join(RA__JOIN__CROSS_PRODUCT,0,marker);
+        join = new Ra__Node__Join(RA__JOIN__CROSS_PRODUCT,marker);
     }
 
     Ra__Node__Attribute* attr;
@@ -314,18 +314,18 @@ Ra__Node* SQLtoRA::parse_where_in_subquery(PgQuery__SubLink* sub_link, bool nega
     uint64_t marker = ++counter;
     if(is_correlated_subquery(sub_link->subselect->select_stmt)){
         if(negated){
-            join = new Ra__Node__Join(RA__JOIN__ANTI_IN_LEFT_DEPENDENT,0,marker);
+            join = new Ra__Node__Join(RA__JOIN__ANTI_IN_LEFT_DEPENDENT,marker);
         }
         else{
-            join = new Ra__Node__Join(RA__JOIN__IN_LEFT_DEPENDENT,0,marker);
+            join = new Ra__Node__Join(RA__JOIN__IN_LEFT_DEPENDENT,marker);
         }
     }
     else{
         if(negated){
-            join = new Ra__Node__Join(RA__JOIN__ANTI_IN_LEFT,0,marker);
+            join = new Ra__Node__Join(RA__JOIN__ANTI_IN_LEFT,marker);
         }
         else{
-            join = new Ra__Node__Join(RA__JOIN__IN_LEFT,0,marker);
+            join = new Ra__Node__Join(RA__JOIN__IN_LEFT,marker);
         }
     }
 
@@ -388,18 +388,18 @@ Ra__Node* SQLtoRA::parse_where_exists_subquery(PgQuery__SelectStmt* select_stmt,
     uint64_t marker = ++counter;
     if(is_correlated_subquery(select_stmt)){
         if(negated){
-            join = new Ra__Node__Join(RA__JOIN__ANTI_LEFT_DEPENDENT,0,marker);
+            join = new Ra__Node__Join(RA__JOIN__ANTI_LEFT_DEPENDENT,marker);
         }
         else{
-            join = new Ra__Node__Join(RA__JOIN__SEMI_LEFT_DEPENDENT,0,marker);
+            join = new Ra__Node__Join(RA__JOIN__SEMI_LEFT_DEPENDENT,marker);
         }
     }
     else{
         if(negated){
-            join = new Ra__Node__Join(RA__JOIN__ANTI_LEFT,0,marker);
+            join = new Ra__Node__Join(RA__JOIN__ANTI_LEFT,marker);
         }
         else{
-            join = new Ra__Node__Join(RA__JOIN__SEMI_LEFT,0,marker);
+            join = new Ra__Node__Join(RA__JOIN__SEMI_LEFT,marker);
         }
     }
     
@@ -444,6 +444,7 @@ bool SQLtoRA::is_correlated_subquery(PgQuery__SelectStmt* select_stmt){
                 relations_aliases.insert({relname,alias});
                 break;
             }
+            // handles attributes of a join without rename (TPCH Q13)
             case PG_QUERY__NODE__NODE_JOIN_EXPR:{
                 PgQuery__JoinExpr* join_expr = select_stmt->from_clause[i]->join_expr;
                 PgQuery__RangeVar* l_range_var = join_expr->larg->range_var;
@@ -484,21 +485,22 @@ bool SQLtoRA::is_correlated_subquery(PgQuery__SelectStmt* select_stmt){
                 break;
             }
         }
-        // check ctes
-        for(const auto& cte: ctes){
-            auto cte_pr = static_cast<Ra__Node__Projection*>(cte);
-            if(attr->alias.length()>0 && attr->alias==cte_pr->subquery_alias){
-                found = true;
-                break;
-            }
-            for(auto& cte_attr: cte_pr->subquery_columns){
-                if(attr->name==cte_attr){
-                    found = true;
-                    break;
-                }
-            }
-            if(found) break;
-        }
+        // why do we check ctes here?
+        // // check ctes
+        // for(const auto& cte: ctes){
+        //     auto cte_pr = static_cast<Ra__Node__Projection*>(cte);
+        //     if(attr->alias.length()>0 && attr->alias==cte_pr->subquery_alias){
+        //         found = true;
+        //         break;
+        //     }
+        //     for(auto& cte_attr: cte_pr->subquery_columns){
+        //         if(attr->name==cte_attr){
+        //             found = true;
+        //             break;
+        //         }
+        //     }
+        //     if(found) break;
+        // }
         if(!found) return true; // is correlated subquery
     }
 
@@ -767,7 +769,7 @@ Ra__Node* SQLtoRA::parse_where_expression(PgQuery__Node* node, Ra__Node* ra_sele
                 default: std::cout << "sublink type not supported" << std::endl;;
             }
             add_subtree(ra_selection,join);
-            // create predicate for in and exists
+            // put marker into predicate for in and exists
             return static_cast<Ra__Node__Join*>(join)->right_where_subquery_marker;
         }
         case PG_QUERY__NODE__NODE_NULL_TEST:{
