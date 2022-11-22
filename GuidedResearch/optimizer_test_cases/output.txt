@@ -30,7 +30,7 @@ exams (sid,date,grade,curriculum,course) as(
 )
 select distinct s.name, e.course
 from students s, exams e,
-        (select s2.id, s2.year, s2.major, avg(e2.grade) as avg
+        (select s2.id, s2.year, s2.major, avg(e2.grade) as avg  
         from exams e2, students s2
         where e2.sid=s2.id or (e2.curriculum=s2.major and s2.year>e2.date)
         group by s2.id, s2.year, s2.major
@@ -38,8 +38,8 @@ from students s, exams e,
 where s.id=e.sid and
     (s.major = 'CS' or s.major = 'Games Eng') and
     e.grade>=m.avg+1 and
-    (m.id=s.id or (m.year>e.date and
-        e.curriculum=m.major))
+    (m.id=s.id or (e.curriculum=m.major and
+        m.year>e.date))
 
 
 -- TPC-H Query 2
