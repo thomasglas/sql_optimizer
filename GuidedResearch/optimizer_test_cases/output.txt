@@ -131,7 +131,7 @@ where
         and p_brand = 'Brand#23'
         and p_container = 'MED BOX'
         and p_partkey = m.l_partkey
-        and l_quantity < avg_
+        and l_quantity < m.avg_
 
 
 -- TPC-H Query 20
@@ -156,7 +156,7 @@ where
                                         l_shipdate >= date '1994-01-01'
                                         and l_shipdate < date '1994-01-01' + interval '1' year
                                 group by l_partkey, l_suppkey
-                        )
+                        ) as m
                 where
                         ps_partkey in (
                                 select
@@ -166,9 +166,9 @@ where
                                 where
                                         p_name like 'forest%'
                         )
-                        and ps_partkey = l_partkey
-                        and ps_suppkey = l_suppkey
-                        and ps_availqty > sum_
+                        and ps_partkey = m.l_partkey
+                        and ps_suppkey = m.l_suppkey
+                        and ps_availqty > m.sum_
         )
         and s_nationkey = n_nationkey
         and n_name = 'CANADA'
@@ -177,22 +177,28 @@ order by
 
 
 -- TPC-H Query 21
-with m(l_orderkey, l_suppkey) as(
-        select
-                l_orderkey, l_suppkey
-        from
+with m1(l_orderkey,l_suppkey) as (
+        select distinct
+                l2.l_orderkey,
+                l2.l_suppkey
+        from 
+                lineitem l1,
                 lineitem l2
-        group by l2.l_orderkey, l2.l_suppkey
-), m2(l_orderkey, l_suppkey) as (
-        select
-                l3.l_orderkey, l3.l_suppkey
-        from
-                lineitem l3
         where
-                l3.l_receiptdate > l3.l_commitdate
-        group by l3.l_orderkey, l3.l_suppkey
+                l1.l_orderkey = l2.l_orderkey
+                and l1.l_suppkey <> l2.l_suppkey
+), m2(l_orderkey,l_suppkey) as (
+        select distinct
+                l2.l_orderkey,
+                l2.l_suppkey
+        from 
+                lineitem l1,
+                lineitem l2
+        where
+                l1.l_orderkey = l2.l_orderkey
+                and l1.l_suppkey <> l2.l_suppkey
+                and l1.l_receiptdate > l1.l_commitdate
 )
-
 select
         s_name,
         count(*) as numwait
@@ -201,25 +207,15 @@ from
         lineitem l1,
         orders,
         nation
+        left join m1 on m1.l_orderkey = l1.l_orderkey and m1.l_suppkey = l1.l_suppkey
+        left join m2 on m2.l_orderkey = l1.l_orderkey and m2.l_suppkey = l1.l_suppkey
 where
         s_suppkey = l1.l_suppkey
         and o_orderkey = l1.l_orderkey
         and o_orderstatus = 'F'
         and l1.l_receiptdate > l1.l_commitdate
-        and exists (
-                select *
-                from m
-                where 
-                        l1.l_orderkey = m.l_orderkey
-                        and l1.l_suppkey <> m.l_suppkey
-        )
-        and not exists (
-                select *
-                from m2
-                where
-                        m2.l_orderkey = l1.l_orderkey
-                        and m2.l_suppkey <> l1.l_suppkey
-        )
+        and m1.l_orderkey is not null
+        and m2.l_orderkey is null
         and s_nationkey = n_nationkey
         and n_name = 'SAUDI ARABIA'
 group by
@@ -227,8 +223,7 @@ group by
 order by
         numwait desc,
         s_name
-limit
-        100
+
 
 
 -- TPC-H Query 22
