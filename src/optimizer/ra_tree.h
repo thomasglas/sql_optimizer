@@ -6,7 +6,7 @@
 
 class RaTree {
     public:
-        RaTree(Ra__Node* _root, std::vector<Ra__Node*> _ctes);
+        RaTree(Ra__Node* _root, std::vector<Ra__Node*> _ctes, uint64_t _counter);
         ~RaTree();
 
         /// Root node of main relational algebra tree
@@ -21,12 +21,22 @@ class RaTree {
         void optimize();
 
     private:
+        // to generate unique ids
+        uint64_t counter;
 
         /**
-         * Find and decorrelate all simply correlated exists in tree.
+         * Find and decorrelate all correlated exists in tree.
          * Simply correlated: subquery is correlated through a single equi predicate
          */
-        void decorrelate_simple_exists();
+        void decorrelate_exists();
+
+        /**
+         * Transform trivially correlated exists subquery to uncorrelated in subquery
+         */
+        void decorrelate_exists_trivial(bool is_boolean_predicate, std::tuple<Ra__Node*,Ra__Node*,std::string,size_t> correlating_predicate, Ra__Node__Selection* sel, std::pair<Ra__Node*, Ra__Node*> exists);
+
+        
+        void decorrelate_exists_complex(std::vector<std::tuple<Ra__Node*,Ra__Node*,std::string,size_t>> correlating_predicates, std::pair<Ra__Node*, Ra__Node*> exists);
 
         /**
          * Find simple correlated exists
@@ -45,7 +55,7 @@ class RaTree {
          */
         void find_joins_by_markers(Ra__Node** it, std::vector<std::pair<Ra__Node*, Ra__Node*>>& markers);
 
-        void simple_exists_to_in(std::pair<Ra__Node*, Ra__Node*>& exists);
+        void check_exists_correlation_type(std::pair<Ra__Node*, Ra__Node*> exists);
 
         /**
          * gets relations and alias in immediate from clause of subquery
@@ -59,6 +69,12 @@ class RaTree {
         bool get_selection(Ra__Node** it);
 
         bool get_selection_parent(Ra__Node** it);
+
+        bool is_trivially_correlated(std::vector<std::tuple<Ra__Node*,Ra__Node*,std::string,size_t>> correlating_predicates);
+        
+        bool is_simply_correlated(std::vector<std::tuple<Ra__Node*,Ra__Node*,std::string,size_t>> correlating_predicates);
+
+        void extract_predicates(Ra__Node* it, std::vector<std::tuple<Ra__Node*,Ra__Node*,std::string,size_t>>& correlating_predicates, bool& is_boolean_predicate, std::set<std::pair<std::string,std::string>> relations_aliases);
 };
 
 #endif

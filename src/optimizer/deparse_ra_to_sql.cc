@@ -384,14 +384,14 @@ void RAtoSQL::deparse_ra_node(Ra__Node* node, size_t layer,
                 case RA__JOIN__INNER: 
                 case RA__JOIN__LEFT: 
                 case RA__JOIN__DEPENDENT_INNER_LEFT:  {
-                    from += "(";
+                    // from += "(";
                     deparse_ra_node(join->childNodes[0],layer, select, where, from, group_by, having, order_by);
                     from += join->join_name();
                     deparse_ra_node(join->childNodes[1],layer, select, where, from, group_by, having, order_by);
                     if(join->predicate!=nullptr){
                         from +=  " on " + deparse_predicate(join->predicate);
                     }
-                    from += ")";
+                    // from += ")";
                     if(join->alias.length()>0){
                         from += " as " + join->alias; 
                     } 

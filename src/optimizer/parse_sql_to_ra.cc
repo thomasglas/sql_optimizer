@@ -1072,5 +1072,5 @@ RaTree* SQLtoRA::parse(const char* query){
     PgQuery__Node* stmt = parse_result->stmts[0]->stmt;
     ra_tree_root = parse_select_statement(stmt->select_stmt);
 
-    return new RaTree(ra_tree_root, ctes);
+    return new RaTree(ra_tree_root, ctes, counter);
 }

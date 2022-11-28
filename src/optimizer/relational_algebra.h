@@ -198,7 +198,7 @@ class Ra__Node__Order_By: public Ra__Node {
 
 class Ra__Node__Group_By: public Ra__Node {
     public:
-        Ra__Node__Group_By(bool _implicit);
+        Ra__Node__Group_By(bool _implicit=false);
         ~Ra__Node__Group_By();
         std::vector<Ra__Node*> args; // expressions/attr/const/case
         bool implicit;
