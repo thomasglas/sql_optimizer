@@ -165,11 +165,11 @@ Ra__Node__Bool_Predicate::~Ra__Node__Bool_Predicate(){
 }
 
 
-Ra__Node__Predicate::Ra__Node__Predicate() {
+Ra__Node__Predicate::Ra__Node__Predicate(Ra__Node* left_, Ra__Node* right_, std::string bin_operator)
+: left(left_), right(right_), binaryOperator(bin_operator)
+{
     node_case = Ra__Node__NodeCase::RA__NODE__PREDICATE;
     n_children = 0;
-    left = nullptr;
-    right = nullptr;
 }
 
 Ra__Node__Predicate::~Ra__Node__Predicate(){

@@ -11,11 +11,14 @@ Q2':
 with students (name,id,major,year) as(
         select *
         from (VALUES 
-                ('Thomas',1,'CS',10), 
+                ('Thomas1',1,'CS',10), 
                 ('Thomas2',2,'CS',11), 
-                ('Thomas3',3,'CS',11), 
-                ('Thomas4',4,'CS',11), 
-                ('Thomas5',5,'Games Eng',11)
+                ('Thomas3',3,'CS',12), 
+                ('Thomas4',4,'CS',10), 
+                ('Thomas5',5,'CS',9), 
+                ('Thomas6',6,'CS',12), 
+                ('Thomas7',7,'CS',11), 
+                ('Thomas6',8,'CS',11)
         )
 ),
 exams (sid,date,grade,curriculum,course) as(
@@ -24,11 +27,15 @@ exams (sid,date,grade,curriculum,course) as(
                 (1,10,1,'CS','FDE'),
                 (2,10,2,'CS','FDE'),
                 (3,10,3,'CS','FDE'),
-                (4,10,1,'CS','FDE'),
-                (5,10,2,'CS','FDE')
+                (4,10,3,'CS','FDE'),
+                (5,9,4,'CS','FDE'),
+                (6,10,5,'CS','FDE'),
+                (7,10,2,'CS','FDE'),
+                (8,10,2,'CS','FDE')
         )
 )
-select distinct s.name, e.course
+-- correct
+select s.name, e.course
 from students s, exams e,(
         select d.id, d.year, d.major, avg(e2.grade) as avg  
         from exams e2, (
@@ -42,9 +49,8 @@ from students s, exams e,(
     ) m
 where s.id=e.sid and
     (s.major = 'CS' or s.major = 'Games Eng') and
-    e.grade>=m.avg+1 and
-    (s.id=m.id or (m.year>e.date and
-        e.curriculum=m.major))
+    e.grade>=m.avg+1 and s.id=m.id and m.year=s.year and s.major=m.major
+    -- paper/wrong: e.grade>=m.avg+1 and (s.id=m.id or (m.year>e.date and e.curriculum=m.major))
 
 
 -- TPC-H Query 2
@@ -209,9 +215,9 @@ select
         count(*) as numwait
 from
         supplier,
-        lineitem l1,
         orders,
-        nation
+        nation,
+        lineitem l1
         left join m1 on m1.l_orderkey = l1.l_orderkey and m1.l_suppkey = l1.l_suppkey
         left join m2 on m2.l_orderkey = l1.l_orderkey and m2.l_suppkey = l1.l_suppkey
 where

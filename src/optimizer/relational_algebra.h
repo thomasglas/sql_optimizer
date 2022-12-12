@@ -66,16 +66,16 @@ typedef enum {
 typedef enum {
     RA__JOIN__CROSS_PRODUCT = 0,
     RA__JOIN__INNER = 1,
-    RA__JOIN__DEPENDENT_INNER_LEFT = 2,
+    RA__JOIN__DEPENDENT_INNER_LEFT = 2, // correlated subquery
     RA__JOIN__LEFT = 4,
-    RA__JOIN__SEMI_LEFT = 6,
-    RA__JOIN__SEMI_LEFT_DEPENDENT = 8,
-    RA__JOIN__ANTI_LEFT = 10,
-    RA__JOIN__ANTI_LEFT_DEPENDENT = 11,
-    RA__JOIN__IN_LEFT = 13,
-    RA__JOIN__IN_LEFT_DEPENDENT = 14,
-    RA__JOIN__ANTI_IN_LEFT = 15,
-    RA__JOIN__ANTI_IN_LEFT_DEPENDENT = 16
+    RA__JOIN__SEMI_LEFT = 6, // exists
+    RA__JOIN__SEMI_LEFT_DEPENDENT = 8, 
+    RA__JOIN__ANTI_LEFT = 10, // not exists
+    RA__JOIN__ANTI_LEFT_DEPENDENT = 11, 
+    RA__JOIN__IN_LEFT = 13, // in
+    RA__JOIN__IN_LEFT_DEPENDENT = 14, 
+    RA__JOIN__ANTI_IN_LEFT = 15, // not in
+    RA__JOIN__ANTI_IN_LEFT_DEPENDENT = 16 
 } Ra__Join__JoinType;
 
 typedef enum {
@@ -138,7 +138,7 @@ class Ra__Node__Join: public Ra__Node{
         std::string to_string();
         std::string join_name();
         
-        Ra__Node* predicate; // Ra__Node__Bool_Predicate/Ra__Node__Predicate
+        Ra__Node* predicate; // Ra__Node__Bool_Predicate/Ra__Node__Predicate/Selection_Marker
         Ra__Join__JoinType type;
         std::string alias;
         std::vector<std::string> columns;
@@ -173,7 +173,7 @@ class Ra__Node__Selection: public Ra__Node {
         Ra__Node__Selection();
         ~Ra__Node__Selection();
         std::string to_string();
-        Ra__Node* predicate; // Ra__Node__Bool_Predicate/Ra__Node__Predicate
+        Ra__Node* predicate; // Ra__Node__Bool_Predicate/Ra__Node__Predicate/Ra__Node__Where_Subquery_Marker
 };
 
 class Ra__Node__Relation: public Ra__Node {
@@ -223,7 +223,7 @@ class Ra__Node__Bool_Predicate: public Ra__Node {
 
 class Ra__Node__Predicate: public Ra__Node {
     public:
-        Ra__Node__Predicate();
+        Ra__Node__Predicate(Ra__Node* left_=nullptr, Ra__Node* right_=nullptr, std::string bin_operator="");
         ~Ra__Node__Predicate();
         Ra__Node* left;
         Ra__Node* right;

@@ -125,6 +125,7 @@ std::string RAtoSQL::deparse_expression(Ra__Node* arg){
 
 std::string RAtoSQL::deparse_order_by_expressions(std::vector<Ra__Node*>& expressions, std::vector<Ra__Order_By__SortDirection>& directions){
     std::string result = "";
+    assert(expressions.size()>0);
     assert(expressions.size()==directions.size());
     size_t n = expressions.size();
 
@@ -146,6 +147,7 @@ std::string RAtoSQL::deparse_order_by_expressions(std::vector<Ra__Node*>& expres
 std::string RAtoSQL::deparse_expressions(std::vector<Ra__Node*>& expressions){
     std::string result = "";
 
+    assert(expressions.size()>0);
     for(auto expression: expressions){
         result += deparse_expression(expression) + ", ";
     }
@@ -312,7 +314,17 @@ void RAtoSQL::deparse_ra_node(Ra__Node* node, size_t layer,
             break;
         }
         case RA__NODE__SELECTION: {
-            where += deparse_selection(node);
+            if(where.length()>0 && static_cast<Ra__Node__Selection*>(node)->predicate->node_case==RA__NODE__BOOL_PREDICATE){
+                where += " and ";
+                where += "(" + deparse_selection(node) + ")";
+            }
+            else if(where.length()>0){
+                where += " and ";
+                where += deparse_selection(node);
+            }
+            else{
+                where += deparse_selection(node);
+            }
             deparse_ra_node(node->childNodes[0], layer, select, where, from, group_by, having, order_by);
             break;
         }
