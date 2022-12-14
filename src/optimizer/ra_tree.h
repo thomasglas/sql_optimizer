@@ -66,7 +66,7 @@ class RaTree {
 
         void push_down_predicates();
 
-        std::vector<Ra__Node*> intersect_correlated_attributes(Ra__Node* dep_join);
+        std::vector<Ra__Node*> intersect_correlated_attributes(Ra__Node* d_projection, Ra__Node* comparsion_subtree);
 
         bool find_marker_parent(Ra__Node** it, Ra__Node__Where_Subquery_Marker* marker, int& child_index);
 

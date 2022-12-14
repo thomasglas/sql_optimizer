@@ -262,50 +262,60 @@ void RaTree::get_predicate_expression_relations(Ra__Node* predicate_expr, std::v
             break;
         }
         // if correlated subquery, need to return relations needed from outside
+        // why not?: change to needing the subquery marker needed to be defined?
         case RA__NODE__WHERE_SUBQUERY_MARKER:{
-            // get correlating attributes of subquery
-            // get relation name/alias of correlating attributes
 
-            // find join node through marker
-            std::vector<std::pair<Ra__Node*,Ra__Node*>> markers_joins = {{predicate_expr,nullptr}};
-            find_joins_by_markers(root, markers_joins);
+            // **** new approach
+            
+            auto marker = static_cast<Ra__Node__Where_Subquery_Marker*>(predicate_expr);
+            relations.push_back("marker_"+std::to_string(marker->marker));
+            break;
 
-            // go through subquery tree, find relation aliases/names
-            std::vector<std::pair<std::string,std::string>> relations_aliases;
-            Ra__Node* it = (markers_joins[0].second)->childNodes[1]->childNodes[0];
-            // start searching from child of subquery projection
-            get_relations_aliases(it, relations_aliases);
+            // **** end new approach
 
-            // !This code only gets outer relations needed by correlated query, but we need all relations
-            // // find (first & only) selection in correlated subquery
-            // it = (markers_joins[0].second)->childNodes[1]->childNodes[0];
-            // // if subquery has selection
-            // if(get_first_selection(&it)){
-            //     Ra__Node__Selection* sel = static_cast<Ra__Node__Selection*>(it);
-            //     std::vector<std::tuple<Ra__Node*,Ra__Node*,std::string,size_t>> correlating_predicates;
-            //     bool dummy_is_boolean_predicate = false;
-            //     get_correlating_predicates(sel->predicate, correlating_predicates, dummy_is_boolean_predicate, relations_aliases);
-            //     for(const auto& p: correlating_predicates){
-            //         // get relation name of outer correlating attribute
-            //         relations.push_back(get_relation_from_attribute(std::get<0>(p)));
+            // // get correlating attributes of subquery
+            // // get relation name/alias of correlating attributes
+
+            // // find join node through marker
+            // std::vector<std::pair<Ra__Node*,Ra__Node*>> markers_joins = {{predicate_expr,nullptr}};
+            // find_joins_by_markers(root, markers_joins);
+
+            // // go through subquery tree, find relation aliases/names
+            // std::vector<std::pair<std::string,std::string>> relations_aliases;
+            // Ra__Node* it = (markers_joins[0].second)->childNodes[1]->childNodes[0];
+            // // start searching from child of subquery projection
+            // get_relations_aliases(it, relations_aliases);
+
+            // // !This code only gets outer relations needed by correlated query, but we need all relations
+            // // // find (first & only) selection in correlated subquery
+            // // it = (markers_joins[0].second)->childNodes[1]->childNodes[0];
+            // // // if subquery has selection
+            // // if(get_first_selection(&it)){
+            // //     Ra__Node__Selection* sel = static_cast<Ra__Node__Selection*>(it);
+            // //     std::vector<std::tuple<Ra__Node*,Ra__Node*,std::string,size_t>> correlating_predicates;
+            // //     bool dummy_is_boolean_predicate = false;
+            // //     get_correlating_predicates(sel->predicate, correlating_predicates, dummy_is_boolean_predicate, relations_aliases);
+            // //     for(const auto& p: correlating_predicates){
+            // //         // get relation name of outer correlating attribute
+            // //         relations.push_back(get_relation_from_attribute(std::get<0>(p)));
+            // //     }
+            // // }
+            // // // no selection
+            // // else{
+            // //     break;
+            // // }
+
+            // for(auto relation_alias: relations_aliases){
+            //     // if relation has alias
+            //     if(relation_alias.second.length()>0){
+            //         relations.push_back(relation_alias.second);
+            //     }
+            //     // else add relation name
+            //     else{
+            //         relations.push_back(relation_alias.first);
             //     }
             // }
-            // // no selection
-            // else{
-            //     break;
-            // }
-
-            for(auto relation_alias: relations_aliases){
-                // if relation has alias
-                if(relation_alias.second.length()>0){
-                    relations.push_back(relation_alias.second);
-                }
-                // else add relation name
-                else{
-                    relations.push_back(relation_alias.first);
-                }
-            }
-            break;
+            // break;
         }
         default: break; // const
     }
@@ -413,10 +423,9 @@ void RaTree::decorrelate_subquery(std::pair<Ra__Node*, Ra__Node*> markers_joins)
     assert(find_marker_parent(&it, marker, child_index));
     replace_selection_marker(it, child_index, new Ra__Node__Attribute("m","t"));
     
-    
     // 1.
     auto original_dep_join = static_cast<Ra__Node__Join*>(markers_joins.second);
-    original_dep_join->type = RA__JOIN__INNER;
+    original_dep_join->type = RA__JOIN__CROSS_PRODUCT;
     original_dep_join->right_where_subquery_marker->marker = 0;
 
     // 1.1
@@ -433,12 +442,22 @@ void RaTree::decorrelate_subquery(std::pair<Ra__Node*, Ra__Node*> markers_joins)
     dep_join->childNodes[1] = original_dep_join->childNodes[1];
     original_dep_join->childNodes[1] = dep_join;
 
+    // add selection above original dep join for the join predicate (using cross product)
+    child_index = -1;
+    Ra__Node* original_dep_join_selection = root;
+    assert(get_node_parent(&original_dep_join_selection, original_dep_join, child_index));
+    if(original_dep_join_selection->node_case!=RA__NODE__SELECTION){
+        Ra__Node__Selection* sel = new Ra__Node__Selection();
+        sel->childNodes.push_back(original_dep_join_selection->childNodes[child_index]);
+        original_dep_join_selection->childNodes[child_index] = sel;
+    }
+
     // 2.1
     Ra__Node__Projection* d_projection = new Ra__Node__Projection();
     d_projection->childNodes.push_back(original_dep_join->childNodes[0]);
     d_projection->subquery_alias = "d";
     dep_join->childNodes[0] = d_projection;
-    auto correlated_attributes = intersect_correlated_attributes(dep_join);
+    auto correlated_attributes = intersect_correlated_attributes(dep_join->childNodes[0],dep_join->childNodes[1]->childNodes[0]);
     for(auto& correlated_attribute: correlated_attributes){
         auto attr = static_cast<Ra__Node__Attribute*>(correlated_attribute);
         // 2.1.2
@@ -446,18 +465,18 @@ void RaTree::decorrelate_subquery(std::pair<Ra__Node*, Ra__Node*> markers_joins)
         d_projection->subquery_columns.push_back(attr->name);
 
         // 1.1 
-        add_predicate_to_join(new Ra__Node__Predicate(new Ra__Node__Attribute(attr->name, attr->alias),new Ra__Node__Attribute(attr->name, "t"),"="), original_dep_join);
+        add_predicate_to_selection(new Ra__Node__Predicate(new Ra__Node__Attribute(attr->name, attr->alias),new Ra__Node__Attribute("t_"+attr->name, "t"),"="), original_dep_join_selection);
+        right_projection->subquery_columns.push_back("t_"+attr->name);
 
         // 2.2
         attr->alias = "d";
         right_projection->args.push_back(new Ra__Node__Attribute(attr->name, attr->alias));
-        right_projection->subquery_columns.push_back(attr->name);
         
     }
 
     // 3.
     Ra__Node* dep_join_parent = original_dep_join;
-    while(!intersect_correlated_attributes(dep_join).empty()){
+    while(!intersect_correlated_attributes(dep_join->childNodes[0],dep_join->childNodes[1]).empty()){
         push_down_dep_join(&dep_join_parent);
     }
 
@@ -729,7 +748,6 @@ bool RaTree::has_equivalent_attribute(Ra__Node* attribute, Ra__Node* predicate, 
 bool RaTree::can_decouple(Ra__Node* selection, const std::vector<Ra__Node*>& d_args, std::map<std::pair<std::string,std::string>, std::pair<std::string,std::string>>& d_rename_map){
     auto sel = static_cast<Ra__Node__Selection*>(selection);
     // every attribute passed from "d" must have an equi predicate
-    bool can_decouple = true;
     for(const auto& d_arg: d_args){
         if(!has_equivalent_attribute(d_arg, sel->predicate, d_rename_map)){
             return false;
@@ -740,10 +758,15 @@ bool RaTree::can_decouple(Ra__Node* selection, const std::vector<Ra__Node*>& d_a
 
 void RaTree::push_down_dep_join(Ra__Node** dep_join_parent){
     // switch dep join parent node case
-    int dep_join_parent_child_id = 0;
-    if((*dep_join_parent)->node_case==RA__NODE__JOIN){
-        dep_join_parent_child_id = 1;
+    int dep_join_parent_child_id = -1;
+    for(int i=0; i<(*dep_join_parent)->childNodes.size(); i++){
+        if((*dep_join_parent)->childNodes[i]->node_case==RA__NODE__JOIN &&
+            static_cast<Ra__Node__Join*>((*dep_join_parent)->childNodes[i])->type==RA__JOIN__DEPENDENT_INNER_LEFT){
+            dep_join_parent_child_id = i;
+            break;
+        }
     }
+    assert(dep_join_parent_child_id!=-1);
 
     // switch dep join right child node case
     switch((*dep_join_parent)->childNodes[dep_join_parent_child_id]->childNodes[1]->node_case){
@@ -775,6 +798,22 @@ void RaTree::push_down_dep_join(Ra__Node** dep_join_parent){
             break;
         }
         case RA__NODE__JOIN:{
+            Ra__Node* dep_join = (*dep_join_parent)->childNodes[dep_join_parent_child_id];
+            if(intersect_correlated_attributes(dep_join->childNodes[0],dep_join->childNodes[1]->childNodes[0]).empty()){
+                Ra__Node* child_join = dep_join->childNodes[1];
+                dep_join->childNodes[1] = child_join->childNodes[1];
+                child_join->childNodes[1] = dep_join;
+                (*dep_join_parent)->childNodes[dep_join_parent_child_id] = child_join;
+            }
+            else if(intersect_correlated_attributes(dep_join->childNodes[0],dep_join->childNodes[1]->childNodes[1]).empty()){
+                Ra__Node* child_join = dep_join->childNodes[1];
+                dep_join->childNodes[1] = child_join->childNodes[0];
+                child_join->childNodes[0] = dep_join;
+                (*dep_join_parent)->childNodes[dep_join_parent_child_id] = child_join;
+            }
+            else{
+                std::cout << "natural join not supported yet" << std::endl;
+            }
             break;
         }
     }
@@ -782,13 +821,13 @@ void RaTree::push_down_dep_join(Ra__Node** dep_join_parent){
 }
 
 // compute intersect of attributes produced by left with free attributes of right
-std::vector<Ra__Node*> RaTree::intersect_correlated_attributes(Ra__Node* dep_join){
+std::vector<Ra__Node*> RaTree::intersect_correlated_attributes(Ra__Node* d_projection, Ra__Node* comparsion_subtree){
     std::vector<Ra__Node*> intersect_result; 
 
     // get relations of left side
     std::vector<std::pair<std::string, std::string>> left_relations_aliases;
     // if D projection has already been initialized
-    auto left_projection = static_cast<Ra__Node__Projection*>(dep_join->childNodes[0]);
+    auto left_projection = static_cast<Ra__Node__Projection*>(d_projection);
     if(left_projection->args.size()>0){
         left_relations_aliases.push_back({"","d"});
     }
@@ -796,26 +835,46 @@ std::vector<Ra__Node*> RaTree::intersect_correlated_attributes(Ra__Node* dep_joi
         get_relations_aliases(left_projection->childNodes[0], left_relations_aliases);
     }
 
+    // get relations of right side
+    Ra__Node* dep_right_child = comparsion_subtree;
+    std::vector<std::pair<std::string, std::string>> right_relations_aliases;
+    get_relations_aliases(dep_right_child, right_relations_aliases);
+
     // get attributes of right side
     std::vector<Ra__Node*> right_attributes;
-    Ra__Node* dep_right_child = dep_join->childNodes[1];
-    get_subtree_attributes(dep_right_child, right_attributes); // currently gets attributes from selection and projection 
+    get_subtree_attributes(dep_right_child, right_attributes);
 
-    // for each right attribute, if it matches a left relation, return it
+    // find attributes on right side which are not covered by relations on right side
+    std::vector<Ra__Node*> right_attributes_correlated;
     for(const auto& attribute: right_attributes){
         auto attr = static_cast<Ra__Node__Attribute*>(attribute);
-        bool found_left_relation = false;
-        for(const auto& relation: left_relations_aliases){
-            if(found_left_relation){
+        bool found_relation = false;
+        for(const auto& relation: right_relations_aliases){
+            if(attr->alias.length()>0 && (attr->alias==relation.first || attr->alias==relation.second)){
+                found_relation = true;
                 break;
             }
+            else if(attr->alias=="" && is_tpch_attribute(attr->name, relation.first)){
+                found_relation = true;
+                break;
+            }
+        }
+        if(!found_relation){
+            right_attributes_correlated.push_back(attr);
+        }
+    }
+
+    // for each right attribute, if it matches a left relation, return it
+    for(const auto& attribute: right_attributes_correlated){
+        auto attr = static_cast<Ra__Node__Attribute*>(attribute);
+        for(const auto& relation: left_relations_aliases){
             if(attr->alias.length()>0 && (attr->alias==relation.first || attr->alias==relation.second)){
-                found_left_relation = true;
                 intersect_result.push_back(attr);
+                break;
             }
             else if(attr->alias=="" && is_tpch_attribute(attr->name, relation.first)){
-                found_left_relation = true;
                 intersect_result.push_back(attr);
+                break;
             }
         }
     }
@@ -897,10 +956,16 @@ void RaTree::get_subtree_attributes(Ra__Node* it, std::vector<Ra__Node*>& attrib
         }
         case RA__NODE__JOIN:{
             auto join = static_cast<Ra__Node__Join*>(it);
-            get_predicate_attributes(join->predicate, attributes);
+            if(join->predicate!=nullptr){
+                get_predicate_attributes(join->predicate, attributes);
+            }
             break;
         }
         case RA__NODE__GROUP_BY:{
+            auto group_by = static_cast<Ra__Node__Group_By*>(it);
+            for(const auto& arg: group_by->args){
+                get_expression_attributes(arg, attributes);
+            }
             break;
         }
         // TODO: all other nodes...
@@ -1010,6 +1075,7 @@ void RaTree::get_relations_aliases(Ra__Node* it, std::vector<std::pair<std::stri
         }
         // right side is selection subquery, only recurse on left
         else if(join->right_where_subquery_marker->marker!=0){
+            relations_aliases.push_back({"","marker_"+std::to_string(join->right_where_subquery_marker->marker)});
             get_relations_aliases(it->childNodes[0], relations_aliases);
         }
         else{
@@ -1392,30 +1458,9 @@ bool get_join_marker_parent(Ra__Node** it, Ra__Node__Where_Subquery_Marker* mark
     return found;
 }
 
-bool RaTree::find_marker_parent(Ra__Node** it, Ra__Node__Where_Subquery_Marker* marker, int& child_index){
+bool find_marker_in_predicate(Ra__Node** it, Ra__Node__Where_Subquery_Marker* marker, int& child_index){
 
-    if((*it)->node_case==RA__NODE__SELECTION){
-        auto sel = static_cast<Ra__Node__Selection*>(*it);
-        if(sel->predicate->node_case==RA__NODE__WHERE_SUBQUERY_MARKER && static_cast<Ra__Node__Where_Subquery_Marker*>(sel->predicate)==marker){
-            return true;
-        }
-        // if marker is part of boolean "not", then return grandparent of marker
-        else if(sel->predicate->node_case==RA__NODE__BOOL_PREDICATE){
-            auto bool_p = static_cast<Ra__Node__Bool_Predicate*>(*it);
-            if(bool_p->bool_operator==RA__BOOL_OPERATOR__NOT){
-                for(size_t i=0; i<bool_p->args.size(); i++){
-                    if(bool_p->args[i]->node_case==RA__NODE__WHERE_SUBQUERY_MARKER && static_cast<Ra__Node__Where_Subquery_Marker*>(bool_p->args[i])==marker){
-                        child_index = i;
-                        return true;
-                    }
-                }
-            }
-        }
-        *it = sel->predicate;
-        return find_marker_parent(it, marker, child_index);
-    }
-
-    else if((*it)->node_case==RA__NODE__BOOL_PREDICATE){
+    if((*it)->node_case==RA__NODE__BOOL_PREDICATE){
         auto bool_p = static_cast<Ra__Node__Bool_Predicate*>(*it);
         for(size_t i=0; i<bool_p->args.size(); i++){
             if(bool_p->args[i]->node_case==RA__NODE__WHERE_SUBQUERY_MARKER && static_cast<Ra__Node__Where_Subquery_Marker*>(bool_p->args[i])==marker){
@@ -1439,7 +1484,7 @@ bool RaTree::find_marker_parent(Ra__Node** it, Ra__Node__Where_Subquery_Marker* 
         for(const auto& arg: bool_p->args){
             if(!found){
                 *it = arg;
-                found = find_marker_parent(it, marker, child_index);
+                found = find_marker_in_predicate(it, marker, child_index);
             }
         }
         return found;
@@ -1461,15 +1506,43 @@ bool RaTree::find_marker_parent(Ra__Node** it, Ra__Node__Where_Subquery_Marker* 
 
             // find in left child
             *it = p->left;
-            found = find_marker_parent(it, marker, child_index);
+            found = find_marker_in_predicate(it, marker, child_index);
 
             // find in right child
             if(!found){
                 *it = p->right;
-                found = find_marker_parent(it, marker, child_index);
+                found = find_marker_in_predicate(it, marker, child_index);
             }
 
             return found;
+        }
+    }
+    return false;
+}
+
+bool RaTree::find_marker_parent(Ra__Node** it, Ra__Node__Where_Subquery_Marker* marker, int& child_index){
+
+    if((*it)->node_case==RA__NODE__SELECTION){
+        auto sel = static_cast<Ra__Node__Selection*>(*it);
+        if(sel->predicate->node_case==RA__NODE__WHERE_SUBQUERY_MARKER && static_cast<Ra__Node__Where_Subquery_Marker*>(sel->predicate)==marker){
+            return true;
+        }
+        // if marker is part of boolean "not", then return grandparent of marker
+        else if(sel->predicate->node_case==RA__NODE__BOOL_PREDICATE){
+            auto bool_p = static_cast<Ra__Node__Bool_Predicate*>(*it);
+            if(bool_p->bool_operator==RA__BOOL_OPERATOR__NOT){
+                for(size_t i=0; i<bool_p->args.size(); i++){
+                    if(bool_p->args[i]->node_case==RA__NODE__WHERE_SUBQUERY_MARKER && static_cast<Ra__Node__Where_Subquery_Marker*>(bool_p->args[i])==marker){
+                        child_index = i;
+                        return true;
+                    }
+                }
+            }
+        }
+        Ra__Node* temp_it = sel->predicate;
+        if(find_marker_in_predicate(&temp_it, marker, child_index)){
+            *it = temp_it;
+            return true;
         }
     }
 
