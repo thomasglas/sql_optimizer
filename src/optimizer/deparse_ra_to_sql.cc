@@ -101,21 +101,6 @@ std::string RAtoSQL::deparse_expression(Ra__Node* arg){
             result += " end";
             break;
         }
-        case RA__NODE__NULL_TEST:{
-            auto null_test = static_cast<Ra__Node__Null_Test*>(arg);
-            result += deparse_expression(null_test->arg);
-            switch(null_test->type){
-                case RA__NULL_TEST__IS_NULL:{
-                    result += " is null";
-                    break;
-                }
-                case RA__NULL_TEST__IS_NOT_NULL:{
-                    result += " is not null";
-                    break;
-                }
-            }
-            break;
-        }
         case RA__NODE__DUMMY: break; //e.g. (dummy)-name
         default: std::cout << "error deparse select" << std::endl;
     }
@@ -196,14 +181,26 @@ std::string RAtoSQL::deparse_predicate(Ra__Node* node){
                 case RA__BOOL_OPERATOR__NOT: {
                     op = "not ";
                     for(auto arg: p->args){
-                        if(arg->node_case==RA__NODE__BOOL_PREDICATE){
-                            result += op + "(" + deparse_predicate(arg) + ")";
-                        }
-                        else if(arg->node_case==RA__NODE__WHERE_SUBQUERY_MARKER && (static_cast<Ra__Node__Where_Subquery_Marker*>(arg)->type==RA__JOIN__ANTI_IN_LEFT || static_cast<Ra__Node__Where_Subquery_Marker*>(arg)->type==RA__JOIN__ANTI_IN_LEFT_DEPENDENT)){
-                            result += deparse_predicate(arg);
-                        }
-                        else{
-                            result += op + deparse_predicate(arg);
+                        switch(arg->node_case){
+                            case RA__NODE__BOOL_PREDICATE:{
+                                result += op + "(" + deparse_predicate(arg) + ")";
+                                break;
+                            }
+                            case RA__NODE__WHERE_SUBQUERY_MARKER:{
+                                if(static_cast<Ra__Node__Where_Subquery_Marker*>(arg)->type==RA__JOIN__ANTI_IN_LEFT 
+                                || static_cast<Ra__Node__Where_Subquery_Marker*>(arg)->type==RA__JOIN__ANTI_IN_LEFT_DEPENDENT){
+                                    result += deparse_predicate(arg);
+                                }
+                                else{
+                                    result += op + deparse_predicate(arg);
+                                }
+                                break;
+                            }
+                            case RA__NODE__NULL_TEST:{
+                                result += deparse_predicate(arg);
+                                break;
+                            }
+                            default: result += op + deparse_predicate(arg);
                         }
                     }
                     break;
@@ -214,6 +211,22 @@ std::string RAtoSQL::deparse_predicate(Ra__Node* node){
         case RA__NODE__PREDICATE: {
             Ra__Node__Predicate* p = static_cast<Ra__Node__Predicate*>(node);
             return deparse_predicate(p->left) + p->binaryOperator + deparse_predicate(p->right);
+        }
+        case RA__NODE__NULL_TEST:{
+            std::string result;
+            auto null_test = static_cast<Ra__Node__Null_Test*>(node);
+            result += deparse_expression(null_test->arg);
+            switch(null_test->type){
+                case RA__NULL_TEST__IS_NULL:{
+                    result += " is null";
+                    break;
+                }
+                case RA__NULL_TEST__IS_NOT_NULL:{
+                    result += " is not null";
+                    break;
+                }
+            }
+            return result;
         }
         case RA__NODE__IN_LIST: {
             Ra__Node__In_List* list = static_cast<Ra__Node__In_List*>(node);

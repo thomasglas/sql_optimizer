@@ -16,7 +16,7 @@ RaTree::~RaTree(){
 
 void RaTree::optimize(){
     push_down_predicates();
-    // decorrelate_all_exists();
+    decorrelate_all_exists();
     decorrelate_arbitrary_queries();
 }
 
@@ -1094,8 +1094,10 @@ void RaTree::get_relations_aliases(Ra__Node* it, std::vector<std::pair<std::stri
     // from subquery
     if(it->node_case==RA__NODE__PROJECTION){
         auto pr = static_cast<Ra__Node__Projection*>(it);
-        relations_aliases.push_back({"",pr->subquery_alias});
-        return;
+        if(pr->subquery_alias!=""){
+            relations_aliases.push_back({"",pr->subquery_alias});
+            return;
+        }
     }
 
     for(const auto& child: it->childNodes){
@@ -1557,6 +1559,40 @@ bool RaTree::find_marker_parent(Ra__Node** it, Ra__Node__Where_Subquery_Marker* 
     return found;
 }
 
+bool RaTree::find_highest_node_with_only_required_relations_defined(Ra__Node** it, std::set<std::string> required_relations){
+    std::vector<std::pair<std::string,std::string>> defined_relations_aliases;
+    get_relations_aliases(*it, defined_relations_aliases);
+    // for(const auto& a: defined_relations_aliases){
+    //     std::cout << a.first << ":" << a.second << std::endl;
+    // }
+    // std::cout << std::endl;
+    if(defined_relations_aliases.size()==required_relations.size()){
+        for(const auto& required_relation: required_relations){
+            bool found = false;
+            for(const auto& defined_relation_alias: defined_relations_aliases){
+                if(required_relation==defined_relation_alias.first || required_relation==defined_relation_alias.second){
+                    found = true;
+                    break;
+                }
+            }
+            if(!found){
+                return false;
+            }
+        }
+        return true;
+    }
+
+    auto childNodes = (*it)->childNodes;
+    bool found = false;
+    for(const auto& child: childNodes){
+        if(!found){
+            *it = child;
+            found = find_highest_node_with_only_required_relations_defined(it, required_relations);
+        }
+    }
+    return found;
+}
+
 void RaTree::decorrelate_exists_complex(std::vector<std::tuple<Ra__Node*,Ra__Node*,std::string,size_t>> correlating_predicates, std::pair<Ra__Node*, Ra__Node*> markers_joins){
     // move subquery to cte, give alias and columns (correlating attributes)
     auto exists_join = static_cast<Ra__Node__Join*>(markers_joins.second);
@@ -1610,7 +1646,7 @@ void RaTree::decorrelate_exists_complex(std::vector<std::tuple<Ra__Node*,Ra__Nod
         correlated_relations.push_back(build_tpch_relation(alias_attr.first, alias_attr.second));
     }
 
-    // add correlated relations to subquery
+    // cte subquery: add correlated relations
     Ra__Node* it = cte_subquery;
     assert(get_join_parent(&it));
     for(const auto& r: correlated_relations){
@@ -1623,17 +1659,48 @@ void RaTree::decorrelate_exists_complex(std::vector<std::tuple<Ra__Node*,Ra__Nod
     
     ctes.push_back(cte_subquery);
 
-    // main tree: left join cte on correlating attributes (equi join)
+    /**
+     * find which relations are needed for left join
+     * - check correlating_predicates args alias (if no alias, check tpch name)
+     * find lowest child where needed relations are defined -> add left join there
+     */
+    std::set<std::string> left_join_required_relations;
+    for(const auto& cor_predicate: correlating_predicates){
+        auto r_attr = static_cast<Ra__Node__Attribute*>(std::get<0>(cor_predicate));
+        if(r_attr->alias!=""){
+            left_join_required_relations.insert(r_attr->alias);
+        }
+        else{
+            left_join_required_relations.insert(get_tpch_relation_name(r_attr->name));
+        }
+    }
+    // only supporting left joining with one relation
+    assert(left_join_required_relations.size()==1);
     it = root;
-    assert(get_join_parent(&it));
+    assert(find_highest_node_with_only_required_relations_defined(&it, left_join_required_relations));
+    // left join children: {it, cte}
+    Ra__Node* insert_join_here = it;
+    it = root;
+    int child_index = -1;
+    assert(get_node_parent(&it, insert_join_here, child_index));
     Ra__Node__Join* left_join = new Ra__Node__Join(RA__JOIN__LEFT); 
     Ra__Node__Relation* cte_relation = new Ra__Node__Relation(cte_name); 
-    left_join->childNodes.push_back(it->childNodes[0]);
+    left_join->childNodes.push_back(it->childNodes[child_index]);
     left_join->childNodes.push_back(cte_relation);
+    it->childNodes[child_index] = left_join;
+
+
+    // main tree: left join cte on correlating attributes (equi join)
+    // it = root;
+    // assert(get_join_parent(&it));
+    // Ra__Node__Join* left_join = new Ra__Node__Join(RA__JOIN__LEFT); 
+    // Ra__Node__Relation* cte_relation = new Ra__Node__Relation(cte_name); 
+    // left_join->childNodes.push_back(it->childNodes[0]);
+    // left_join->childNodes.push_back(cte_relation);
     if(correlating_predicates.size()==1){
         Ra__Node__Predicate* join_p = new Ra__Node__Predicate();
         auto cor_predicate = correlating_predicates[0];
-        auto l_attr = static_cast<Ra__Node__Attribute*>(std::get<0>(cor_predicate));
+        auto l_attr = static_cast<Ra__Node__Attribute*>(std::get<1>(cor_predicate));
         auto r_attr = static_cast<Ra__Node__Attribute*>(std::get<0>(cor_predicate));
         join_p->binaryOperator = "=";
         join_p->left = new Ra__Node__Attribute(l_attr->name, cte_name);
@@ -1645,7 +1712,7 @@ void RaTree::decorrelate_exists_complex(std::vector<std::tuple<Ra__Node*,Ra__Nod
         join_p->bool_operator = RA__BOOL_OPERATOR__AND;
         for(const auto& cor_predicate: correlating_predicates){
             Ra__Node__Predicate* p = new Ra__Node__Predicate();
-            auto l_attr = static_cast<Ra__Node__Attribute*>(std::get<0>(cor_predicate));
+            auto l_attr = static_cast<Ra__Node__Attribute*>(std::get<1>(cor_predicate));
             auto r_attr = static_cast<Ra__Node__Attribute*>(std::get<0>(cor_predicate));
             p->binaryOperator = "=";
             p->left = new Ra__Node__Attribute(l_attr->name, cte_name);
@@ -1654,8 +1721,6 @@ void RaTree::decorrelate_exists_complex(std::vector<std::tuple<Ra__Node*,Ra__Nod
         }
         left_join->predicate = join_p;
     }
-    
-    it->childNodes[0] = left_join;
 
     // in main selection: replace exists with null check
     // remove exists join
@@ -1672,6 +1737,7 @@ void RaTree::decorrelate_exists_complex(std::vector<std::tuple<Ra__Node*,Ra__Nod
     auto marker = static_cast<Ra__Node__Where_Subquery_Marker*>(markers_joins.first);
     assert(find_marker_parent(&it, marker, index));
     Ra__Node__Null_Test* null_test = new Ra__Node__Null_Test();
+
     switch(marker->type){
         case RA__JOIN__SEMI_LEFT_DEPENDENT:{
             null_test->type = RA__NULL_TEST__IS_NOT_NULL;
@@ -1683,6 +1749,7 @@ void RaTree::decorrelate_exists_complex(std::vector<std::tuple<Ra__Node*,Ra__Nod
         }
         default: std::cout << "this join type should not be found here" << std::endl;
     }
+
     // can use any of the correlating predicates for null check
     null_test->arg = new Ra__Node__Attribute(static_cast<Ra__Node__Attribute*>(std::get<0>(correlating_predicates[0]))->name, cte_name);;
     

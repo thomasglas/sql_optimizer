@@ -132,6 +132,8 @@ class RaTree {
         void remove_redundant_predicates(Ra__Node* predicate, Ra__Node* predicate_parent);
 
         bool has_equivalent_attribute(Ra__Node* attribute, Ra__Node* predicate, std::map<std::pair<std::string,std::string>, std::pair<std::string,std::string>>& d_rename_map);
+
+        bool find_highest_node_with_only_required_relations_defined(Ra__Node** it, std::set<std::string> required_relations);
 };
 
 #endif
