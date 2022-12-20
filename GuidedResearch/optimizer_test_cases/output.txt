@@ -52,6 +52,22 @@ where s.id=e.sid and
     e.grade>=m.avg+1 and s.id=m.id and m.year=s.year and s.major=m.major
     -- paper/wrong: e.grade>=m.avg+1 and (s.id=m.id or (m.year>e.date and e.curriculum=m.major))
 
+Q0':
+select s.name,t.lecturenr
+from students s, test t, 
+        (select min(t2.grade) as m, t2.studnr
+        from test t2
+        group by t2.studnr
+        ) temp_1,
+        (select max(t2.grade) as m, t2.studnr
+        from test t2
+        group by t2.studnr
+        ) temp_2
+where s.studnr=t.studnr 
+    and t.grade=temp_1.m
+    and s.studnr=temp_1.studnr
+    and t.grade=temp_2.m
+    and s.studnr=temp_2.studnr
 
 -- TPC-H Query 2
 select

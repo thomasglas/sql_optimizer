@@ -16,3 +16,188 @@ where s.id=e.sid and
         where s.id=e2.sid or 
             (e2.curriculum=s.major and
             s.year>e2.date))
+
+Q0':
+select s.name,t.lecturenr
+from students s, test t
+where s.studnr=t.studnr 
+    and t.grade=(select min(t2.grade)
+        from test t2
+        where s.studnr=t2.studnr) 
+    and t.grade=(select max(t2.grade)
+        from test t2
+        where s.studnr=t2.studnr)
+
+Q1':
+select s.name,t.lecturenr
+from students s, test t
+where s.studnr=t.studnr and
+    t.grade=(select min(t2.grade)
+        from test t2, professors p
+        where s.studnr=t2.studnr and p.persnr=t.persnr)
+
+Q2':
+select s.name,t.lecturenr
+from students s, test t
+where s.studnr=t.studnr and
+    t.grade=(select min(t2.grade)
+        from test t2 left join professors p on t2.studnr=p.persnr
+        where s.studnr=t2.studnr)
+
+Q2'':
+select s.name,t.lecturenr
+from students s, test t
+where s.studnr=t.studnr and
+    t.grade=(select min(t2.grade)
+        from test t2 left join professors p on t2.studnr=p.persnr
+        where s.studnr=t2.studnr and p.persnr=t.persnr)
+
+Q3':
+select s.name,t.lecturenr
+from students s, test t
+where s.studnr=t.studnr and
+    t.grade=(select min(t2.grade)
+        from test t2 full outer join professors p on t2.studnr=p.persnr
+        where s.studnr=t2.studnr)        
+
+Q4':
+select s.name,t.lecturenr
+from students s, test t
+where s.studnr=t.studnr and
+    t.grade=(select min(t2.grade)
+        from test t2
+        where s.studnr=t2.studnr 
+                and t2.studnr in (
+                        select p.persnr 
+                        from professors p
+                        )
+        )
+
+Q4'':
+select s.name,t.lecturenr
+from students s, test t
+where s.studnr=t.studnr and
+    t.grade=(select min(t2.grade)
+        from test t2
+        where s.studnr=t2.studnr 
+                and s.studnr in (
+                        select p.persnr 
+                        from professors p
+                        )
+        )       
+
+Q5':
+select s.name,t.lecturenr
+from students s, test t
+where s.studnr=t.studnr and
+    t.grade=(select min(t2.grade)
+        from test t2
+        where s.studnr=t2.studnr 
+                and t2.studnr not in (
+                        select p.persnr 
+                        from professors p
+                        )
+        )
+
+Q5'':
+select s.name,t.lecturenr
+from students s, test t
+where s.studnr=t.studnr and
+    t.grade=(select min(t2.grade)
+        from test t2
+        where s.studnr=t2.studnr 
+                and s.studnr not in (
+                        select p.persnr 
+                        from professors p
+                        )
+        )
+
+Q6':
+select s.name,t.lecturenr
+from students s, test t
+where s.studnr=t.studnr and
+    t.grade=(select min(t2.grade)
+        from test t2
+        where s.studnr=t2.studnr 
+                and exists (
+                        select p.persnr 
+                        from professors p
+                        )
+        )
+
+Q6'':
+select s.name,t.lecturenr
+from students s, test t
+where s.studnr=t.studnr and
+    t.grade=(select min(t2.grade)
+        from test t2
+        where s.studnr=t2.studnr 
+                and exists (
+                        select p.persnr 
+                        from professors p
+                        where p.persnr=s.studnr
+                        )
+        )
+
+Q7':
+select s.name,t.lecturenr
+from students s, test t
+where s.studnr=t.studnr and
+    t.grade=(select min(t2.grade)
+        from test t2
+        where s.studnr=t2.studnr 
+                and not exists (
+                        select p.persnr 
+                        from professors p
+                        )
+        )
+
+Q7'':
+select s.name,t.lecturenr
+from students s, test t
+where s.studnr=t.studnr and
+    t.grade=(select min(t2.grade)
+        from test t2
+        where s.studnr=t2.studnr 
+                and not exists (
+                        select p.persnr 
+                        from professors p
+                        where p.persnr=s.studnr
+                        )
+        )
+
+Q8':
+select s.name,t.lecturenr
+from students s, test t
+where s.studnr=t.studnr and
+    t.grade=(select min(t3.grade)
+        from 
+                ((select t2.studnr, t2.grade from test t2)
+                union
+                (select t2.studnr, t2.grade from test t2)) as t3
+        where s.studnr=t3.studnr
+        )
+
+Q9':
+select s.name,t.lecturenr
+from students s, test t
+where s.studnr=t.studnr and
+    t.grade=(select min(t3.grade)
+        from 
+                ((select t2.studnr, t2.grade from test t2)
+                intersect
+                (select t2.studnr, t2.grade from test t2)) as t3
+        where s.studnr=t3.studnr
+        )
+
+Q10':
+select s.name,t.lecturenr
+from students s, test t
+where s.studnr=t.studnr and
+    t.grade=(select min(t3.grade)
+        from 
+                ((select t2.studnr, t2.grade from test t2)
+                except
+                (select t2.studnr, t2.grade from test t2)) as t3
+        where s.studnr=t3.studnr
+        )
