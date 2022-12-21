@@ -3,6 +3,7 @@
 
 #include <stdio.h>
 #include <vector>
+#include <memory>
 #include <string>
 #include <cassert>
 #include <iostream>
@@ -122,28 +123,26 @@ class Ra__Node__Where_Subquery_Marker;
 
 class Ra__Node{
     public:
-        ~Ra__Node();
         virtual std::string to_string();
         bool is_full();
 
         Ra__Node__NodeCase node_case;
-        std::vector<Ra__Node*> childNodes;
+        std::vector<std::shared_ptr<Ra__Node>> childNodes;
         size_t n_children;
 };
 
 class Ra__Node__Join: public Ra__Node{
     public:
         Ra__Node__Join(Ra__Join__JoinType _type, uint64_t r_marker=0);
-        ~Ra__Node__Join();
         std::string to_string();
         std::string join_name();
         
-        Ra__Node* predicate; // Ra__Node__Bool_Predicate/Ra__Node__Predicate/Selection_Marker
+        std::shared_ptr<Ra__Node> predicate; // Ra__Node__Bool_Predicate/Ra__Node__Predicate/Selection_Marker
         Ra__Join__JoinType type;
         std::string alias;
         std::vector<std::string> columns;
 
-        Ra__Node__Where_Subquery_Marker* right_where_subquery_marker;
+        std::shared_ptr<Ra__Node__Where_Subquery_Marker> right_where_subquery_marker;
 };
 
 class Ra__Node__Where_Subquery_Marker: public Ra__Node {
@@ -160,9 +159,8 @@ class Ra__Node__Where_Subquery_Marker: public Ra__Node {
 class Ra__Node__Projection: public Ra__Node {
     public:
         Ra__Node__Projection();
-        ~Ra__Node__Projection();
         std::string to_string();
-        std::vector<Ra__Node*> args; // Ra__Node__Select_Expression
+        std::vector<std::shared_ptr<Ra__Node>> args; // Ra__Node__Select_Expression
         std::string subquery_alias;
         std::vector<std::string> subquery_columns;
         bool distinct;
@@ -171,27 +169,24 @@ class Ra__Node__Projection: public Ra__Node {
 class Ra__Node__Selection: public Ra__Node {
     public:
         Ra__Node__Selection();
-        ~Ra__Node__Selection();
         std::string to_string();
-        Ra__Node* predicate; // Ra__Node__Bool_Predicate/Ra__Node__Predicate/Ra__Node__Where_Subquery_Marker
+        std::shared_ptr<Ra__Node> predicate; // Ra__Node__Bool_Predicate/Ra__Node__Predicate/Ra__Node__Where_Subquery_Marker
 };
 
 class Ra__Node__Relation: public Ra__Node {
     public:
         Ra__Node__Relation(std::string _name, std::string _alias="");
-        ~Ra__Node__Relation();
         std::string to_string();
         std::string name;
         std::string alias;
-        std::vector<Ra__Node__Attribute*> attributes;
+        std::vector<std::shared_ptr<Ra__Node__Attribute>> attributes;
 };
 
 // sort operator
 class Ra__Node__Order_By: public Ra__Node {
     public:
         Ra__Node__Order_By();
-        ~Ra__Node__Order_By();
-        std::vector<Ra__Node*> args; // expressions/attr/const/case
+        std::vector<std::shared_ptr<Ra__Node>> args; // expressions/attr/const/case
         std::vector<Ra__Order_By__SortDirection> directions;
         std::string to_string();
 };
@@ -199,8 +194,7 @@ class Ra__Node__Order_By: public Ra__Node {
 class Ra__Node__Group_By: public Ra__Node {
     public:
         Ra__Node__Group_By(bool _implicit=false);
-        ~Ra__Node__Group_By();
-        std::vector<Ra__Node*> args; // expressions/attr/const/case
+        std::vector<std::shared_ptr<Ra__Node>> args; // expressions/attr/const/case
         bool implicit;
         std::string to_string();
 };
@@ -208,25 +202,22 @@ class Ra__Node__Group_By: public Ra__Node {
 class Ra__Node__Having: public Ra__Node {
     public:
         Ra__Node__Having();
-        ~Ra__Node__Having();
-        Ra__Node* predicate; // Ra__Node__Bool_Predicate or Ra__Node__Predicate
+        std::shared_ptr<Ra__Node> predicate; // Ra__Node__Bool_Predicate or Ra__Node__Predicate
         std::string to_string();
 };
 
 class Ra__Node__Bool_Predicate: public Ra__Node {
     public:
         Ra__Node__Bool_Predicate();
-        ~Ra__Node__Bool_Predicate();
-        std::vector<Ra__Node*> args;
+        std::vector<std::shared_ptr<Ra__Node>> args;
         Ra__Bool_Operator__OperatorCase bool_operator;
 };
 
 class Ra__Node__Predicate: public Ra__Node {
     public:
-        Ra__Node__Predicate(Ra__Node* left_=nullptr, Ra__Node* right_=nullptr, std::string bin_operator="");
-        ~Ra__Node__Predicate();
-        Ra__Node* left;
-        Ra__Node* right;
+        Ra__Node__Predicate(std::shared_ptr<Ra__Node> left_=nullptr, std::shared_ptr<Ra__Node> right_=nullptr, std::string bin_operator="");
+        std::shared_ptr<Ra__Node> left;
+        std::shared_ptr<Ra__Node> right;
         // Ra__Binary_Operator binaryOperator;
         std::string binaryOperator;
 };
@@ -234,27 +225,24 @@ class Ra__Node__Predicate: public Ra__Node {
 class Ra__Node__Select_Expression: public Ra__Node {
     public:
         Ra__Node__Select_Expression();
-        ~Ra__Node__Select_Expression();
-        Ra__Node* expression;
+        std::shared_ptr<Ra__Node> expression;
         std::string rename;
 };
 
 class Ra__Node__Expression: public Ra__Node {
     public:
         Ra__Node__Expression();
-        ~Ra__Node__Expression();
-        void add_arg(Ra__Node* arg);
-        Ra__Node* r_arg;
-        Ra__Node* l_arg; //const, attributes, func calls, type cast
+        void add_arg(std::shared_ptr<Ra__Node> arg);
+        std::shared_ptr<Ra__Node> r_arg;
+        std::shared_ptr<Ra__Node> l_arg; //const, attributes, func calls, type cast
         std::string operator_;
 };
 
 class Ra__Node__Type_Cast: public Ra__Node {
     public:
-        Ra__Node__Type_Cast(std::string _type, std::string _typ_mod="", Ra__Node* _expression = new Ra__Node__Expression());
-        ~Ra__Node__Type_Cast();
+        Ra__Node__Type_Cast(std::string _type, std::string _typ_mod="", std::shared_ptr<Ra__Node> _expression = std::make_shared<Ra__Node__Expression>());
         std::string to_string();
-        Ra__Node* expression;
+        std::shared_ptr<Ra__Node> expression;
         std::string type;
         std::string typ_mod; // interval '2' month
 };
@@ -279,8 +267,7 @@ class Ra__Node__Constant: public Ra__Node  {
 class Ra__Node__Func_Call: public Ra__Node {
     public:
         Ra__Node__Func_Call(std::string _func_name);
-        ~Ra__Node__Func_Call();
-        std::vector<Ra__Node*> args;
+        std::vector<std::shared_ptr<Ra__Node>> args;
         std::string func_name;
         bool is_aggregating;
         bool agg_distinct;
@@ -289,39 +276,34 @@ class Ra__Node__Func_Call: public Ra__Node {
 class Ra__Node__List: public Ra__Node {
     public:
         Ra__Node__List();
-        ~Ra__Node__List();
-        std::vector<Ra__Node*> args;
+        std::vector<std::shared_ptr<Ra__Node>> args;
 };
 
 class Ra__Node__In_List: public Ra__Node {
     public:
         Ra__Node__In_List();
-        ~Ra__Node__In_List();
-        std::vector<Ra__Node*> args;
+        std::vector<std::shared_ptr<Ra__Node>> args;
 };
 
 class Ra__Node__Case_Expr: public Ra__Node {
     public:
         Ra__Node__Case_Expr();
-        ~Ra__Node__Case_Expr();
-        std::vector<Ra__Node__Case_When*> args;
-        Ra__Node* else_default;
+        std::vector<std::shared_ptr<Ra__Node__Case_When>> args;
+        std::shared_ptr<Ra__Node> else_default;
 };
 
 class Ra__Node__Case_When: public Ra__Node {
     public:
-        Ra__Node__Case_When(Ra__Node* _when, Ra__Node* _then);
-        ~Ra__Node__Case_When();
-        Ra__Node* when; // predicate
-        Ra__Node* then; // expression
+        Ra__Node__Case_When(std::shared_ptr<Ra__Node> _when, std::shared_ptr<Ra__Node> _then);
+        std::shared_ptr<Ra__Node> when; // predicate
+        std::shared_ptr<Ra__Node> then; // expression
 };
 
 class Ra__Node__Values: public Ra__Node {
     public:
         Ra__Node__Values();
-        ~Ra__Node__Values();
         std::string to_string();
-        std::vector<Ra__Node*> values; // constants
+        std::vector<std::shared_ptr<Ra__Node>> values; // constants
         std::string alias;
         std::string column;
 };
@@ -329,8 +311,7 @@ class Ra__Node__Values: public Ra__Node {
 class Ra__Node__Null_Test: public Ra__Node {
     public:
         Ra__Node__Null_Test();
-        ~Ra__Node__Null_Test();
-        Ra__Node* arg;
+        std::shared_ptr<Ra__Node> arg;
         Ra__Null_Test__Type type;
 };
 

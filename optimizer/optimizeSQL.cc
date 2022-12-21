@@ -7,6 +7,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <iostream>
+#include <memory>
 #include "protobuf/pg_query.pb-c.h"
 #include "optimizer/relational_algebra.h"
 #include "optimizer/parse_sql_to_ra.h"
@@ -41,10 +42,10 @@ std::vector<const char*> tests = {
   "select distinct id from students",
   "select count(distinct id) from students",
   "select extract(year from _date) from students",
-  "select s2.sid from (select s.id, s.name from students s) as s2(sid,firstname)",
   "select * from (students s left outer join professors p on s.id=p.id) as s2(col1, col2)",
   "with foo(a,b) as (select a,b from students) select * from foo",
   "select * from students s where id is null and name is not null",
+  "select s2.sid from (select s.id, s.name from students s) as s2(sid,firstname)",
 };
 
 std::vector<const char*> tests_correlated = {
@@ -133,10 +134,10 @@ void parse_json(){
 void run_tests(){
   std::cout << "\n===== tests =====" << std::endl;
   for(auto test: tests){
-    SQLtoRA* sql_to_ra = new SQLtoRA();
-    RaTree* raTree = sql_to_ra->parse(test);
-    std::cout << raTree->root->to_string() <<std::endl;
-    RAtoSQL* ra_to_sql = new RAtoSQL(raTree);
+    auto sql_to_ra = std::make_shared<SQLtoRA>();
+    std::shared_ptr<RaTree> raTree = sql_to_ra->parse(test);
+    // std::cout << raTree->root->to_string() <<std::endl;
+    auto ra_to_sql = std::make_shared<RAtoSQL>(raTree);
     std::string sql = ra_to_sql->deparse();
     std::cout << sql << std::endl;
   }
@@ -145,11 +146,11 @@ void run_tests(){
 void run_tests_correlated(){
   std::cout << "\n===== correlated tests =====" << std::endl;
   for(auto test: tests_correlated){
-    SQLtoRA* sql_to_ra = new SQLtoRA();
-    RaTree* raTree = sql_to_ra->parse(test);
+    auto sql_to_ra = std::make_shared<SQLtoRA>();
+    std::shared_ptr<RaTree> raTree = sql_to_ra->parse(test);
     raTree->optimize();
     std::cout << raTree->root->to_string() << "\n" << std::endl;
-    RAtoSQL* ra_to_sql = new RAtoSQL(raTree);
+    auto ra_to_sql = std::make_shared<RAtoSQL>(raTree);
     std::string sql = ra_to_sql->deparse();
     std::cout << sql << std::endl;
   }
@@ -158,12 +159,12 @@ void run_tests_correlated(){
 void run_q1q2(){
   std::cout << "\n===== Q1Q2 tests =====" << std::endl;
   for(auto test: Q1Q2){
-    SQLtoRA* sql_to_ra = new SQLtoRA();
-    RaTree* raTree = sql_to_ra->parse(test);
+    auto sql_to_ra = std::make_shared<SQLtoRA>();
+    std::shared_ptr<RaTree> raTree = sql_to_ra->parse(test);
     std::cout << raTree->root->to_string() << "\n" << std::endl;
     raTree->optimize();
     std::cout << raTree->root->to_string() << "\n" << std::endl;
-    RAtoSQL* ra_to_sql = new RAtoSQL(raTree);
+    auto ra_to_sql = std::make_shared<RAtoSQL>(raTree);
     std::string sql = ra_to_sql->deparse();
     std::cout << sql << std::endl;
   }
@@ -172,12 +173,12 @@ void run_q1q2(){
 void run_tpch_correlated(){
   std::cout << "\n===== TPCH tests =====" << std::endl;
   for(auto test: tpch_correlated){
-    SQLtoRA* sql_to_ra = new SQLtoRA();
-    RaTree* raTree = sql_to_ra->parse(test);
+    auto sql_to_ra = std::make_shared<SQLtoRA>();
+    std::shared_ptr<RaTree> raTree = sql_to_ra->parse(test);
     std::cout << raTree->root->to_string() << "\n" << std::endl;
     raTree->optimize();
     std::cout << raTree->root->to_string() << "\n" << std::endl;
-    RAtoSQL* ra_to_sql = new RAtoSQL(raTree);
+    auto ra_to_sql = std::make_shared<RAtoSQL>(raTree);
     std::string sql = ra_to_sql->deparse();
     std::cout << sql << std::endl;
   }
@@ -186,10 +187,10 @@ void run_tpch_correlated(){
 void run_tpch_uncorrelated(){
   std::cout << "\n===== TPCH tests =====" << std::endl;
   for(auto test: tpch_uncorrelated){
-    SQLtoRA* sql_to_ra = new SQLtoRA();
-    RaTree* raTree = sql_to_ra->parse(test);
+    auto sql_to_ra = std::make_shared<SQLtoRA>();
+    std::shared_ptr<RaTree> raTree = sql_to_ra->parse(test);
     std::cout << raTree->root->to_string() << "\n" << std::endl;
-    RAtoSQL* ra_to_sql = new RAtoSQL(raTree);
+    auto ra_to_sql = std::make_shared<RAtoSQL>(raTree);
     std::string sql = ra_to_sql->deparse();
     std::cout << sql << std::endl;
   }
@@ -205,11 +206,11 @@ void deparse_protobuf(const char* test){
 }
 
 int main() {
-  // run_tests();
+  run_tests();
   // run_tests_correlated();
   run_q1q2();
-  // run_tpch_correlated();
-  // run_tpch_uncorrelated();
+  run_tpch_correlated();
+  run_tpch_uncorrelated();
   // parse_json();
   // Optional, this ensures all memory is freed upon program exit (useful when running Valgrind)
   pg_query_exit();

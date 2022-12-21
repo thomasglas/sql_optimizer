@@ -2,13 +2,13 @@
 #define deparse_ra_to_sql
 
 #include <string>
+#include <memory>
 #include "relational_algebra.h"
 #include "ra_tree.h"
 
 class RAtoSQL{
     public:
-        RAtoSQL(RaTree* _raTree);
-        ~RAtoSQL();
+        RAtoSQL(std::shared_ptr<RaTree> _raTree);
 
         /**
          * Deparses relational algebra tree to SQL
@@ -19,7 +19,16 @@ class RAtoSQL{
 
     private:
         /// root node of relational algebra tree
-        RaTree* raTree;
+        std::shared_ptr<RaTree> raTree;
+
+        /**
+         * 
+         * Deparses a relational algebra projection node to a SQL select statement
+         * 
+         * @param ra_root pointer to root of relational algebra tree
+         * @return SQL select statement as string
+         */
+        std::string deparse_ctes(std::vector<std::shared_ptr<Ra__Node>>);
 
         /**
          * Deparses a relational algebra projection node to a SQL select statement
@@ -27,15 +36,7 @@ class RAtoSQL{
          * @param ra_root pointer to root of relational algebra tree
          * @return SQL select statement as string
          */
-        std::string deparse_ctes(std::vector<Ra__Node*>);
-
-        /**
-         * Deparses a relational algebra projection node to a SQL select statement
-         * 
-         * @param ra_root pointer to root of relational algebra tree
-         * @return SQL select statement as string
-         */
-        std::string deparse_projection(Ra__Node* node);
+        std::string deparse_projection(std::shared_ptr<Ra__Node> node);
 
         /**
          * Deparses a relational algebra tree node to SQL. Recursively called on all children
@@ -49,7 +50,7 @@ class RAtoSQL{
          * @param having SQL having output string
          * @param order_by SQL order by output string
          */
-        void deparse_ra_node(Ra__Node* node, size_t layer, std::string& select, std::string& where, std::string& from, std::string& group_by, std::string& having, std::string& order_by);
+        void deparse_ra_node(std::shared_ptr<Ra__Node> node, size_t layer, std::string& select, std::string& where, std::string& from, std::string& group_by, std::string& having, std::string& order_by);
 
         /**
          * Deparses relation to SQL
@@ -57,7 +58,7 @@ class RAtoSQL{
          * @param node relation
          * @return Relation as SQL string
          */
-        std::string deparse_relation(Ra__Node* node);
+        std::string deparse_relation(std::shared_ptr<Ra__Node> node);
         
         /**
          * Deparses selection to SQL
@@ -65,7 +66,7 @@ class RAtoSQL{
          * @param node selection
          * @return selection as SQL string
          */
-        std::string deparse_selection(Ra__Node* node);
+        std::string deparse_selection(std::shared_ptr<Ra__Node> node);
 
         /**
          * Deparses predicate to SQL
@@ -73,7 +74,7 @@ class RAtoSQL{
          * @param node predicate
          * @return predicate as SQL string
          */
-        std::string deparse_predicate(Ra__Node* node);
+        std::string deparse_predicate(std::shared_ptr<Ra__Node> node);
 
         /**
          * Deparses list of expressions to SQL
@@ -81,7 +82,7 @@ class RAtoSQL{
          * @param expressions vector of expressions
          * @return expressions as comma separated SQL string
          */
-        std::string deparse_expressions(std::vector<Ra__Node*>& expressions);
+        std::string deparse_expressions(std::vector<std::shared_ptr<Ra__Node>>& expressions);
 
         /**
          * Deparses list of order by expressions to SQL
@@ -89,7 +90,7 @@ class RAtoSQL{
          * @param expressions vector of expressions
          * @return expressions as comma separated SQL string
          */
-        std::string deparse_order_by_expressions(std::vector<Ra__Node*>& expressions, std::vector<Ra__Order_By__SortDirection>& directions);
+        std::string deparse_order_by_expressions(std::vector<std::shared_ptr<Ra__Node>>& expressions, std::vector<Ra__Order_By__SortDirection>& directions);
 
         /**
          * Deparses an expression to SQL
@@ -97,7 +98,7 @@ class RAtoSQL{
          * @param expression expression
          * @return expression as SQL string
          */
-        std::string deparse_expression(Ra__Node* arg);
+        std::string deparse_expression(std::shared_ptr<Ra__Node> arg);
 
         /**
          * Finds the join with corresponding subquery marker, sets it = join when found
@@ -106,7 +107,7 @@ class RAtoSQL{
          * @param marker the marker to be found
          * @return if marker is found
          */
-        bool find_marker_subquery(Ra__Node** it, Ra__Node__Where_Subquery_Marker* marker);
+        bool find_marker_subquery(std::shared_ptr<Ra__Node>& it, std::shared_ptr<Ra__Node__Where_Subquery_Marker> marker);
 };
 
 #endif

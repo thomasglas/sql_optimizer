@@ -1,11 +1,5 @@
 #include "relational_algebra.h"
 
-Ra__Node::~Ra__Node(){
-    for(auto child: childNodes){
-        delete child;
-    }
-}
-
 std::string Ra__Node::to_string() {
     return "";
 }
@@ -20,10 +14,6 @@ Ra__Node__Join::Ra__Node__Join(Ra__Join__JoinType _type, uint64_t r_marker)
     node_case = Ra__Node__NodeCase::RA__NODE__JOIN;
     n_children = 2;
     predicate = nullptr;
-}
-
-Ra__Node__Join::~Ra__Node__Join(){
-    delete predicate;
 }
 
 std::string Ra__Node__Join::to_string(){
@@ -56,12 +46,6 @@ std::string Ra__Node__Join::join_name(){
     }
 }
 
-Ra__Node__Projection::~Ra__Node__Projection(){
-    for(auto arg: args){
-        delete arg;
-    }
-}
-
 Ra__Node__Projection::Ra__Node__Projection(){
     node_case = Ra__Node__NodeCase::RA__NODE__PROJECTION;
     n_children = 1;
@@ -79,10 +63,6 @@ Ra__Node__Selection::Ra__Node__Selection(){
     predicate = nullptr;
 }
 
-Ra__Node__Selection::~Ra__Node__Selection(){
-    delete predicate;
-}
-
 std::string Ra__Node__Selection::to_string(){
     assert(childNodes.size()==1);
     return "\u03C3(" + childNodes[0]->to_string() + ")";
@@ -94,12 +74,6 @@ Ra__Node__Relation::Ra__Node__Relation(std::string _name, std::string _alias)
     n_children = 0;
 }
 
-Ra__Node__Relation::~Ra__Node__Relation(){
-    for(auto attr: attributes){
-        delete attr;
-    }
-}
-
 std::string Ra__Node__Relation::to_string(){
     assert(childNodes.size()==0);
     return alias.length()==0 ? name : name + " " + alias;
@@ -108,12 +82,6 @@ std::string Ra__Node__Relation::to_string(){
 Ra__Node__Order_By::Ra__Node__Order_By(){
     node_case = Ra__Node__NodeCase::RA__NODE__ORDER_BY;
     n_children = 1;
-}
-
-Ra__Node__Order_By::~Ra__Node__Order_By(){
-    for(auto arg: args){
-        delete arg;
-    }
 }
 
 std::string Ra__Node__Order_By::to_string(){
@@ -127,12 +95,6 @@ Ra__Node__Group_By::Ra__Node__Group_By(bool _implicit)
     n_children = 1;
 }
 
-Ra__Node__Group_By::~Ra__Node__Group_By(){
-    for(auto arg: args){
-        delete arg;
-    }
-}
-
 std::string Ra__Node__Group_By::to_string(){
     assert(childNodes.size()==1);
     return "\u0393(" + childNodes[0]->to_string() + ")";
@@ -142,10 +104,6 @@ Ra__Node__Having::Ra__Node__Having(){
     node_case = Ra__Node__NodeCase::RA__NODE__HAVING;
     n_children = 1;
     predicate = nullptr;
-}
-
-Ra__Node__Having::~Ra__Node__Having(){
-    delete predicate;
 }
 
 std::string Ra__Node__Having::to_string(){
@@ -158,33 +116,18 @@ Ra__Node__Bool_Predicate::Ra__Node__Bool_Predicate(){
     n_children = 0;
 }
 
-Ra__Node__Bool_Predicate::~Ra__Node__Bool_Predicate(){
-    for(auto arg: args){
-        delete arg;
-    }
-}
 
-
-Ra__Node__Predicate::Ra__Node__Predicate(Ra__Node* left_, Ra__Node* right_, std::string bin_operator)
+Ra__Node__Predicate::Ra__Node__Predicate(std::shared_ptr<Ra__Node> left_, std::shared_ptr<Ra__Node> right_, std::string bin_operator)
 : left(left_), right(right_), binaryOperator(bin_operator)
 {
     node_case = Ra__Node__NodeCase::RA__NODE__PREDICATE;
     n_children = 0;
 }
 
-Ra__Node__Predicate::~Ra__Node__Predicate(){
-    delete left;
-    delete right;
-}
-
 Ra__Node__Select_Expression::Ra__Node__Select_Expression(){
     node_case = Ra__Node__NodeCase::RA__NODE__SELECT_EXPRESSION;
     n_children = 0;
-    expression = new Ra__Node__Expression();
-}
-
-Ra__Node__Select_Expression::~Ra__Node__Select_Expression(){
-    delete expression;
+    expression = std::make_shared<Ra__Node__Expression>();
 }
 
 Ra__Node__Expression::Ra__Node__Expression(){
@@ -194,25 +137,16 @@ Ra__Node__Expression::Ra__Node__Expression(){
     l_arg = nullptr;
 }
 
-Ra__Node__Expression::~Ra__Node__Expression(){
-    delete r_arg;
-    delete l_arg;
-}
-
-void Ra__Node__Expression::add_arg(Ra__Node* arg){
+void Ra__Node__Expression::add_arg(std::shared_ptr<Ra__Node> arg){
     if(r_arg==nullptr) r_arg=arg;
     else if(l_arg==nullptr) l_arg=arg;
     else std::cout << "error in expression add arg, already full" << std::endl;
 }
 
-Ra__Node__Type_Cast::Ra__Node__Type_Cast(std::string _type, std::string _typ_mod, Ra__Node* _expression)
+Ra__Node__Type_Cast::Ra__Node__Type_Cast(std::string _type, std::string _typ_mod, std::shared_ptr<Ra__Node> _expression)
 :type(_type),typ_mod(_typ_mod),expression(_expression){
     node_case = Ra__Node__NodeCase::RA__NODE__TYPE_CAST;
     n_children = 0;
-}
-
-Ra__Node__Type_Cast::~Ra__Node__Type_Cast(){
-    delete expression;
 }
 
 std::string Ra__Node__Type_Cast::to_string(){
@@ -252,32 +186,14 @@ Ra__Node__Func_Call::Ra__Node__Func_Call(std::string _func_name)
     agg_distinct = false;
 }
 
-Ra__Node__Func_Call::~Ra__Node__Func_Call(){
-    for(auto arg: args){
-        delete arg;
-    }
-}
-
 Ra__Node__List::Ra__Node__List(){
     node_case = Ra__Node__NodeCase::RA__NODE__LIST;
     n_children = 0;
 }
 
-Ra__Node__List::~Ra__Node__List(){
-    for(auto arg: args){
-        delete arg;
-    }
-}
-
 Ra__Node__In_List::Ra__Node__In_List(){
     node_case = Ra__Node__NodeCase::RA__NODE__IN_LIST;
     n_children = 0;
-}
-
-Ra__Node__In_List::~Ra__Node__In_List(){
-    for(auto arg: args){
-        delete arg;
-    }
 }
 
 Ra__Node__Case_Expr::Ra__Node__Case_Expr(){
@@ -286,32 +202,15 @@ Ra__Node__Case_Expr::Ra__Node__Case_Expr(){
     else_default = nullptr;
 }
 
-Ra__Node__Case_Expr::~Ra__Node__Case_Expr(){
-    for(auto arg: args){
-        delete arg;
-    }
-}
-
-Ra__Node__Case_When::Ra__Node__Case_When(Ra__Node* _when, Ra__Node* _then)
+Ra__Node__Case_When::Ra__Node__Case_When(std::shared_ptr<Ra__Node> _when, std::shared_ptr<Ra__Node> _then)
 :when(_when), then(_then){
     node_case = Ra__Node__NodeCase::RA__NODE__CASE_WHEN;
     n_children = 0;
 }
 
-Ra__Node__Case_When::~Ra__Node__Case_When(){
-    delete when;
-    delete then;
-}
-
 Ra__Node__Values::Ra__Node__Values(){
     node_case = Ra__Node__NodeCase::RA__NODE__VALUES;
     n_children = 0;
-}
-
-Ra__Node__Values::~Ra__Node__Values(){
-    for(auto value: values){
-        delete value;
-    }
 }
 
 std::string Ra__Node__Values::to_string(){
@@ -322,10 +221,6 @@ Ra__Node__Null_Test::Ra__Node__Null_Test(){
     node_case = Ra__Node__NodeCase::RA__NODE__NULL_TEST;
     n_children = 0;
     arg = nullptr;
-}
-
-Ra__Node__Null_Test::~Ra__Node__Null_Test(){
-    delete arg;
 }
 
 Ra__Node__Where_Subquery_Marker::Ra__Node__Where_Subquery_Marker(uint64_t _marker, Ra__Join__JoinType _type)

@@ -7,30 +7,26 @@
 
 #include "deparse_ra_to_sql.h"
 
-RAtoSQL::RAtoSQL(RaTree* _raTree)
+RAtoSQL::RAtoSQL(std::shared_ptr<RaTree> _raTree)
 :raTree(_raTree){
 };
 
-RAtoSQL::~RAtoSQL(){
-    delete raTree;
-};
-
-std::string RAtoSQL::deparse_expression(Ra__Node* arg){
+std::string RAtoSQL::deparse_expression(std::shared_ptr<Ra__Node> arg){
     std::string result = "";
 
     switch(arg->node_case){
         case RA__NODE__CONST: {
-            auto constant = static_cast<Ra__Node__Constant*>(arg);
+            auto constant = std::static_pointer_cast<Ra__Node__Constant>(arg);
             result += constant->to_string();
             break;
         }
         case RA__NODE__ATTRIBUTE: {
-            auto attr = static_cast<Ra__Node__Attribute*>(arg);
+            auto attr = std::static_pointer_cast<Ra__Node__Attribute>(arg);
             result += attr->to_string();
             break;
         }
         case RA__NODE__FUNC_CALL: {
-            auto func_call = static_cast<Ra__Node__Func_Call*>(arg);
+            auto func_call = std::static_pointer_cast<Ra__Node__Func_Call>(arg);
             if(func_call->func_name=="substring"){
                 switch(func_call->args.size()){
                     case 1: result += func_call->func_name + "(" + deparse_expression(func_call->args[0]) + ")"; break;
@@ -54,7 +50,7 @@ std::string RAtoSQL::deparse_expression(Ra__Node* arg){
             break;
         }
         case RA__NODE__TYPE_CAST: {
-            auto type_cast = static_cast<Ra__Node__Type_Cast*>(arg);
+            auto type_cast = std::static_pointer_cast<Ra__Node__Type_Cast>(arg);
             if(type_cast->typ_mod.length()>0)
                 result += type_cast->type + " " + deparse_expression(type_cast->expression) + " " + type_cast->typ_mod;
             else
@@ -62,7 +58,7 @@ std::string RAtoSQL::deparse_expression(Ra__Node* arg){
             break;
         }
         case RA__NODE__SELECT_EXPRESSION:{
-            auto sel_expr = static_cast<Ra__Node__Select_Expression*>(arg);
+            auto sel_expr = std::static_pointer_cast<Ra__Node__Select_Expression>(arg);
             result += deparse_expression(sel_expr->expression);
             if(sel_expr->rename.size()>0){
                 result += " as " + sel_expr->rename;
@@ -70,7 +66,7 @@ std::string RAtoSQL::deparse_expression(Ra__Node* arg){
             break;
         }
         case RA__NODE__EXPRESSION:{
-            auto expr = static_cast<Ra__Node__Expression*>(arg);
+            auto expr = std::static_pointer_cast<Ra__Node__Expression>(arg);
             result += "(";
             if(expr->l_arg!=nullptr){
                 result += deparse_expression(expr->l_arg);
@@ -83,14 +79,14 @@ std::string RAtoSQL::deparse_expression(Ra__Node* arg){
             break;
         }
         case RA__NODE__LIST:{
-            auto list = static_cast<Ra__Node__List*>(arg);
+            auto list = std::static_pointer_cast<Ra__Node__List>(arg);
             for(size_t i=0;i<list->args.size();i++){
                 result += i<list->args.size()-1 ? deparse_expression(list->args[i])+" and " : deparse_expression(list->args[i]);
             }
             break;
         }
         case RA__NODE__CASE_EXPR:{
-            auto case_expr = static_cast<Ra__Node__Case_Expr*>(arg);
+            auto case_expr = std::static_pointer_cast<Ra__Node__Case_Expr>(arg);
             result += "case";
             for(auto& arg: case_expr->args){
                 result += " when " + deparse_predicate(arg->when) + " then " + deparse_expression(arg->then);
@@ -108,7 +104,7 @@ std::string RAtoSQL::deparse_expression(Ra__Node* arg){
     return result;
 }
 
-std::string RAtoSQL::deparse_order_by_expressions(std::vector<Ra__Node*>& expressions, std::vector<Ra__Order_By__SortDirection>& directions){
+std::string RAtoSQL::deparse_order_by_expressions(std::vector<std::shared_ptr<Ra__Node>>& expressions, std::vector<Ra__Order_By__SortDirection>& directions){
     std::string result = "";
     assert(expressions.size()>0);
     assert(expressions.size()==directions.size());
@@ -129,7 +125,7 @@ std::string RAtoSQL::deparse_order_by_expressions(std::vector<Ra__Node*>& expres
     return result;
 }
 
-std::string RAtoSQL::deparse_expressions(std::vector<Ra__Node*>& expressions){
+std::string RAtoSQL::deparse_expressions(std::vector<std::shared_ptr<Ra__Node>>& expressions){
     std::string result = "";
 
     assert(expressions.size()>0);
@@ -141,11 +137,11 @@ std::string RAtoSQL::deparse_expressions(std::vector<Ra__Node*>& expressions){
     return result;
 }
 
-std::string RAtoSQL::deparse_predicate(Ra__Node* node){
+std::string RAtoSQL::deparse_predicate(std::shared_ptr<Ra__Node> node){
     switch(node->node_case){
         case RA__NODE__BOOL_PREDICATE: {
             std::string result = "";
-            Ra__Node__Bool_Predicate* p = static_cast<Ra__Node__Bool_Predicate*>(node);
+            auto p = std::static_pointer_cast<Ra__Node__Bool_Predicate>(node);
             std::string op;
             switch(p->bool_operator){
                 case RA__BOOL_OPERATOR__AND: {
@@ -187,8 +183,8 @@ std::string RAtoSQL::deparse_predicate(Ra__Node* node){
                                 break;
                             }
                             case RA__NODE__WHERE_SUBQUERY_MARKER:{
-                                if(static_cast<Ra__Node__Where_Subquery_Marker*>(arg)->type==RA__JOIN__ANTI_IN_LEFT 
-                                || static_cast<Ra__Node__Where_Subquery_Marker*>(arg)->type==RA__JOIN__ANTI_IN_LEFT_DEPENDENT){
+                                if(std::static_pointer_cast<Ra__Node__Where_Subquery_Marker>(arg)->type==RA__JOIN__ANTI_IN_LEFT 
+                                || std::static_pointer_cast<Ra__Node__Where_Subquery_Marker>(arg)->type==RA__JOIN__ANTI_IN_LEFT_DEPENDENT){
                                     result += deparse_predicate(arg);
                                 }
                                 else{
@@ -209,12 +205,12 @@ std::string RAtoSQL::deparse_predicate(Ra__Node* node){
             return result;
         }
         case RA__NODE__PREDICATE: {
-            Ra__Node__Predicate* p = static_cast<Ra__Node__Predicate*>(node);
+            auto p = std::static_pointer_cast<Ra__Node__Predicate>(node);
             return deparse_predicate(p->left) + p->binaryOperator + deparse_predicate(p->right);
         }
         case RA__NODE__NULL_TEST:{
             std::string result;
-            auto null_test = static_cast<Ra__Node__Null_Test*>(node);
+            auto null_test = std::static_pointer_cast<Ra__Node__Null_Test>(node);
             result += deparse_expression(null_test->arg);
             switch(null_test->type){
                 case RA__NULL_TEST__IS_NULL:{
@@ -229,7 +225,7 @@ std::string RAtoSQL::deparse_predicate(Ra__Node* node){
             return result;
         }
         case RA__NODE__IN_LIST: {
-            Ra__Node__In_List* list = static_cast<Ra__Node__In_List*>(node);
+            auto list = std::static_pointer_cast<Ra__Node__In_List>(node);
             std::string str = "(";
             for(auto& arg: list->args){
                 str += deparse_expression(arg) + ",";
@@ -240,12 +236,12 @@ std::string RAtoSQL::deparse_predicate(Ra__Node* node){
             return str;
         }
         case RA__NODE__WHERE_SUBQUERY_MARKER:{
-            auto marker = static_cast<Ra__Node__Where_Subquery_Marker*>(node);
+            auto marker = std::static_pointer_cast<Ra__Node__Where_Subquery_Marker>(node);
             // find join
-            Ra__Node** it = &(raTree->root);
+            std::shared_ptr<Ra__Node> it = raTree->root;
             assert(find_marker_subquery(it, marker));
-            auto join = static_cast<Ra__Node__Join*>(*it);
-            Ra__Node* subquery = nullptr;
+            auto join = std::static_pointer_cast<Ra__Node__Join>(it);
+            std::shared_ptr<Ra__Node> subquery = nullptr;
             subquery = join->childNodes[1];
             switch(join->type){
                 case RA__JOIN__SEMI_LEFT: 
@@ -258,13 +254,13 @@ std::string RAtoSQL::deparse_predicate(Ra__Node* node){
                 case RA__JOIN__IN_LEFT:
                 case RA__JOIN__IN_LEFT_DEPENDENT:{
                     // in
-                    Ra__Node__Predicate* p = static_cast<Ra__Node__Predicate*>(join->predicate);
+                    auto p = std::static_pointer_cast<Ra__Node__Predicate>(join->predicate);
                     return deparse_expression(p->left) + " in (" + deparse_projection(subquery)+")";
                 }
                 case RA__JOIN__ANTI_IN_LEFT:
                 case RA__JOIN__ANTI_IN_LEFT_DEPENDENT:{
                     // not in
-                    Ra__Node__Predicate* p = static_cast<Ra__Node__Predicate*>(join->predicate);
+                    auto p = std::static_pointer_cast<Ra__Node__Predicate>(join->predicate);
                     return deparse_expression(p->left) + " not in (" + deparse_projection(subquery)+")";
                 }
                 default: return "("+deparse_projection(subquery)+")";
@@ -273,46 +269,45 @@ std::string RAtoSQL::deparse_predicate(Ra__Node* node){
             
         }
         default: {
-            Ra__Node__Expression* expression = static_cast<Ra__Node__Expression*>(node);
+            auto expression = std::static_pointer_cast<Ra__Node__Expression>(node);
             return deparse_expression(expression);
         }
     }
 }
 
-bool RAtoSQL::find_marker_subquery(Ra__Node** it, Ra__Node__Where_Subquery_Marker* marker){
-    if((*it)->node_case==RA__NODE__JOIN){
-        auto join = static_cast<Ra__Node__Join*>(*it);
+bool RAtoSQL::find_marker_subquery(std::shared_ptr<Ra__Node>& it, std::shared_ptr<Ra__Node__Where_Subquery_Marker> marker){
+    if(it->node_case==RA__NODE__JOIN){
+        auto join = std::static_pointer_cast<Ra__Node__Join>(it);
         if(join->right_where_subquery_marker==marker){
             return true;
         }
     }
     
-    if((*it)->n_children == 0){
+    if(it->n_children == 0){
         return false;
     }
 
     bool found = false;
-    std::vector<Ra__Node*> childNodes = (*it)->childNodes;
+    std::vector<std::shared_ptr<Ra__Node>> childNodes = it->childNodes;
     for(auto child: childNodes){
         if(!found){
-            *it = child;
+            it = child;
             found = find_marker_subquery(it, marker);
         }
     }
     return found;
 }
 
-std::string RAtoSQL::deparse_selection(Ra__Node* node){
-    Ra__Node__Selection* sel = static_cast<Ra__Node__Selection*>(node);
-    return deparse_predicate(sel->predicate);
+std::string RAtoSQL::deparse_selection(std::shared_ptr<Ra__Node> node){
+    return deparse_predicate(std::static_pointer_cast<Ra__Node__Selection>(node)->predicate);
 }
 
-std::string RAtoSQL::deparse_relation(Ra__Node* node){
-    Ra__Node__Relation* relation = static_cast<Ra__Node__Relation*>(node);
+std::string RAtoSQL::deparse_relation(std::shared_ptr<Ra__Node> node){
+    auto relation = std::static_pointer_cast<Ra__Node__Relation>(node);
     return relation->alias.length()>0 ? relation->name + " " + relation->alias : relation->name;
 }
 
-void RAtoSQL::deparse_ra_node(Ra__Node* node, size_t layer, 
+void RAtoSQL::deparse_ra_node(std::shared_ptr<Ra__Node> node, size_t layer, 
     std::string& select, 
     std::string& where, 
     std::string& from,
@@ -327,7 +322,7 @@ void RAtoSQL::deparse_ra_node(Ra__Node* node, size_t layer,
             break;
         }
         case RA__NODE__SELECTION: {
-            if(where.length()>0 && static_cast<Ra__Node__Selection*>(node)->predicate->node_case==RA__NODE__BOOL_PREDICATE){
+            if(where.length()>0 && std::static_pointer_cast<Ra__Node__Selection>(node)->predicate->node_case==RA__NODE__BOOL_PREDICATE){
                 where += " and ";
                 where += "(" + deparse_selection(node) + ")";
             }
@@ -342,7 +337,7 @@ void RAtoSQL::deparse_ra_node(Ra__Node* node, size_t layer,
             break;
         }
         case RA__NODE__PROJECTION: {
-            Ra__Node__Projection* pr = static_cast<Ra__Node__Projection*>(node);
+            auto pr = std::static_pointer_cast<Ra__Node__Projection>(node);
             if(layer==0){
                 select = "select ";
                 if(pr->distinct){
@@ -368,7 +363,7 @@ void RAtoSQL::deparse_ra_node(Ra__Node* node, size_t layer,
             break;
         }
         case RA__NODE__GROUP_BY: {
-            Ra__Node__Group_By* gb = static_cast<Ra__Node__Group_By*>(node);
+            auto gb = std::static_pointer_cast<Ra__Node__Group_By>(node);
             if(!gb->implicit){
                 group_by += deparse_expressions(gb->args);
             }
@@ -376,13 +371,13 @@ void RAtoSQL::deparse_ra_node(Ra__Node* node, size_t layer,
             break;
         }
         case RA__NODE__ORDER_BY: {
-            Ra__Node__Order_By* ob = static_cast<Ra__Node__Order_By*>(node);
+            auto ob = std::static_pointer_cast<Ra__Node__Order_By>(node);
             order_by += deparse_order_by_expressions(ob->args, ob->directions);
             deparse_ra_node(ob->childNodes[0], layer, select, where, from, group_by, having, order_by);
             break;
         }
         case RA__NODE__HAVING: {
-            Ra__Node__Having* ha = static_cast<Ra__Node__Having*>(node);
+            auto ha = std::static_pointer_cast<Ra__Node__Having>(node);
             having += deparse_predicate(ha->predicate);
             deparse_ra_node(ha->childNodes[0], layer, select, where, from, group_by, having, order_by);
             break;
@@ -392,10 +387,10 @@ void RAtoSQL::deparse_ra_node(Ra__Node* node, size_t layer,
             break;
         }
         case RA__NODE__JOIN: {
-            Ra__Node__Join* join = static_cast<Ra__Node__Join*>(node);
+            auto join = std::static_pointer_cast<Ra__Node__Join>(node);
             // switch case join type
             assert(join->is_full());
-            if(static_cast<Ra__Node__Join*>(node)->right_where_subquery_marker->marker>0){
+            if(std::static_pointer_cast<Ra__Node__Join>(node)->right_where_subquery_marker->marker>0){
                 deparse_ra_node(join->childNodes[0], layer, select, where, from, group_by, having, order_by);
                 break;
             }
@@ -444,7 +439,7 @@ void RAtoSQL::deparse_ra_node(Ra__Node* node, size_t layer,
             break;
         }
         case RA__NODE__VALUES:{
-            auto values = static_cast<Ra__Node__Values*>(node);
+            auto values = std::static_pointer_cast<Ra__Node__Values>(node);
             from += "(values";
             for(auto& v: values->values){
                 from += "(" + deparse_expression(v) + "),";
@@ -460,7 +455,7 @@ void RAtoSQL::deparse_ra_node(Ra__Node* node, size_t layer,
     }
 }
 
-std::string RAtoSQL::deparse_projection(Ra__Node* node){
+std::string RAtoSQL::deparse_projection(std::shared_ptr<Ra__Node> node){
 
     std::string select = "";
     std::string from = "";
@@ -503,12 +498,12 @@ std::string RAtoSQL::deparse_projection(Ra__Node* node){
     return sql;
 }
 
-std::string RAtoSQL::deparse_ctes(std::vector<Ra__Node*> ctes){
+std::string RAtoSQL::deparse_ctes(std::vector<std::shared_ptr<Ra__Node>> ctes){
     std::string sql = "";
     if(ctes.size()>0){
         sql += "with ";
         for(auto& cte: ctes){
-            auto cte_pr = static_cast<Ra__Node__Projection*>(cte);
+            auto cte_pr = std::static_pointer_cast<Ra__Node__Projection>(cte);
             std::string cte_cols = "";
             if(cte_pr->subquery_columns.size()>0){
                 cte_cols += "(";
