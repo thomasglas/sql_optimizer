@@ -61,7 +61,7 @@ class RaTree {
 
         std::tuple<std::shared_ptr<Ra__Node>,std::shared_ptr<Ra__Node>,std::string> is_correlating_predicate(std::shared_ptr<Ra__Node__Predicate> p, const std::vector<std::pair<std::string,std::string>>& relations_aliases);
 
-        void push_down_dep_join(std::shared_ptr<Ra__Node>& dep_join_parent);
+        void push_down_dep_join(std::shared_ptr<Ra__Node>& dep_join_parent, std::shared_ptr<Ra__Node> original_right_projection);
 
         void push_down_predicates();
 
@@ -126,7 +126,7 @@ class RaTree {
 
         bool can_decouple(std::shared_ptr<Ra__Node> selection, const std::vector<std::shared_ptr<Ra__Node>>& d_args, std::map<std::pair<std::string,std::string>, std::pair<std::string,std::string>>& d_rename_map);
 
-        void rename_attributes(std::shared_ptr<Ra__Node> it, std::map<std::pair<std::string,std::string>, std::pair<std::string,std::string>> rename_map);
+        void rename_attributes(std::shared_ptr<Ra__Node> it, std::map<std::pair<std::string,std::string>, std::pair<std::string,std::string>> rename_map, std::shared_ptr<Ra__Node> stop_node=nullptr);
 
         void remove_redundant_predicates(std::shared_ptr<Ra__Node>& predicate, std::shared_ptr<Ra__Node>& predicate_parent);
 
@@ -141,6 +141,8 @@ class RaTree {
         bool get_join_marker_parent(std::shared_ptr<Ra__Node>& it, std::shared_ptr<Ra__Node__Where_Subquery_Marker> marker, int& index);
 
         bool get_join(std::shared_ptr<Ra__Node>& it);
+        
+        void find_attributes_using_alias(std::shared_ptr<Ra__Node> it, std::vector<std::string>& aliases, std::vector<std::shared_ptr<Ra__Node>>& attributes);
 };
 
 #endif

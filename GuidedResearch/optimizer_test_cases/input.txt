@@ -33,8 +33,7 @@ select s.name,t.lecturenr
 from students s, test t
 where s.studnr=t.studnr and
     t.grade=(select min(t2.grade)
-        from test t2, professors p
-        where s.studnr=t2.studnr and p.persnr=t.persnr)
+        from test t2 join professors p on s.studnr=t2.studnr and p.persnr=t.persnr)
 
 Q2':
 select s.name,t.lecturenr

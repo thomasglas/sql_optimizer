@@ -77,22 +77,23 @@ std::vector<const char*> tpch_correlated = {
 
 
 std::vector<const char*> q_extended = {
-  /*Q0' multiple correlations */ "select s.name,t.lecturenr from students s, test t where s.studnr=t.studnr and t.grade=(select min(t2.grade) from test t2 where s.studnr=t2.studnr) and t.grade=(select max(t2.grade) from test t2 where s.studnr=t2.studnr)",
-  /*Q1' inner join (both sides correlated)*/ "select s.name,t.lecturenr from students s, test t where s.studnr=t.studnr and t.grade=(select min(t2.grade) from test t2, professors p where s.studnr=t2.studnr and p.persnr=t.persnr)",
-  /*Q2' left outer join*/ "select s.name,t.lecturenr from students s, test t where s.studnr=t.studnr and t.grade=(select min(t2.grade) from test t2 left join professors p on t2.studnr=p.persnr where s.studnr=t2.studnr)",
-  /*Q2'' left outer join (both sides correlated)*/ "select s.name,t.lecturenr from students s, test t where s.studnr=t.studnr and t.grade=(select min(t2.grade) from test t2 left join professors p on t2.studnr=p.persnr where s.studnr=t2.studnr and p.persnr=t.persnr)",
-  /*Q3' full outer join*/ "select s.name,t.lecturenr from students s, test t where s.studnr=t.studnr and t.grade=(select min(t2.grade) from test t2 full outer join professors p on t2.studnr=p.persnr where s.studnr=t2.studnr) ",
-  /*Q4' in join (?)*/ "select s.name,t.lecturenr from students s, test t where s.studnr=t.studnr and t.grade=(select min(t2.grade) from test t2 where s.studnr=t2.studnr and t2.studnr in ( select p.persnr from professors p ) )",
-  /*Q4'' in join (both sides correlated) (?)*/ " select s.name,t.lecturenr from students s, test t where s.studnr=t.studnr and t.grade=(select min(t2.grade) from test t2 where s.studnr=t2.studnr and s.studnr in ( select p.persnr from professors p ) ) ",
-  /*Q5' anti in join (?)*/ "select s.name,t.lecturenr from students s, test t where s.studnr=t.studnr and t.grade=(select min(t2.grade) from test t2 where s.studnr=t2.studnr and t2.studnr not in ( select p.persnr from professors p ) )",
-  /*Q5'' anti in join (both sides correlated) (?)*/ "select s.name,t.lecturenr from students s, test t where s.studnr=t.studnr and t.grade=(select min(t2.grade) from test t2 where s.studnr=t2.studnr and s.studnr not in ( select p.persnr from professors p ) )",
-  /*Q6' semi join (exists)*/ "select s.name,t.lecturenr from students s, test t where s.studnr=t.studnr and t.grade=(select min(t2.grade) from test t2 where s.studnr=t2.studnr and exists ( select p.persnr from professors p ) )",
-  /*Q6'' semi join (exists) (both sides correlated)*/ "select s.name,t.lecturenr from students s, test t where s.studnr=t.studnr and t.grade=(select min(t2.grade) from test t2 where s.studnr=t2.studnr and exists ( select p.persnr from professors p where p.persnr=s.studnr) )",
-  /*Q7' anti join (not exists)*/ "select s.name,t.lecturenr from students s, test t where s.studnr=t.studnr and t.grade=(select min(t2.grade) from test t2 where s.studnr=t2.studnr and not exists ( select p.persnr from professors p) )",
-  /*Q7'' anti join (not exists) (both sides correlated)*/ "select s.name,t.lecturenr from students s, test t where s.studnr=t.studnr and t.grade=(select min(t2.grade) from test t2 where s.studnr=t2.studnr and not exists ( select p.persnr from professors p where p.persnr=s.studnr) )",
-  /*Q8' union*/ "select s.name,t.lecturenr from students s, test t where s.studnr=t.studnr and t.grade=(select min(t3.grade) from ((select t2.studnr, t2.grade from test t2) union (select t2.studnr, t2.grade from test t2)) as t3 where s.studnr=t3.studnr )",
-  /*Q9' intersect*/ "select s.name,t.lecturenr from students s, test t where s.studnr=t.studnr and t.grade=(select min(t3.grade) from ((select t2.studnr, t2.grade from test t2) intersect (select t2.studnr, t2.grade from test t2)) as t3 where s.studnr=t3.studnr )",
-  /*Q10' division (except?)*/ "select s.name,t.lecturenr from students s, test t where s.studnr=t.studnr and t.grade=(select min(t3.grade) from ((select t2.studnr, t2.grade from test t2) except (select t2.studnr, t2.grade from test t2)) as t3 where s.studnr=t3.studnr )",
+  /* both sides correlated */ "select s.name,t.lecturenr from students s, test t where s.studnr=t.studnr and t.grade=(select min(t2.grade) from test t2, professors p where s.studnr<t2.studnr and p.persnr<t.persnr)",
+  // /*Q0' multiple correlations */ "select s.name,t.lecturenr from students s, test t where s.studnr=t.studnr and t.grade=(select min(t2.grade) from test t2 where s.studnr=t2.studnr) and t.grade=(select max(t2.grade) from test t2 where s.studnr=t2.studnr)",
+  // /*Q1' inner join (both sides correlated)*/ "select s.name,t.lecturenr from students s, test t where s.studnr=t.studnr and t.grade=(select min(t2.grade) from test t2 join professors p on s.studnr=t2.studnr and p.persnr=t.persnr)",
+  // /*Q2' left outer join*/ "select s.name,t.lecturenr from students s, test t where s.studnr=t.studnr and t.grade=(select min(t2.grade) from test t2 left join professors p on t2.studnr=p.persnr where s.studnr=t2.studnr)",
+  // /*Q2'' left outer join (both sides correlated)*/ "select s.name,t.lecturenr from students s, test t where s.studnr=t.studnr and t.grade=(select min(t2.grade) from test t2 left join professors p on t2.studnr=p.persnr where s.studnr=t2.studnr and p.persnr=t.persnr)",
+  // /*Q3' full outer join*/ "select s.name,t.lecturenr from students s, test t where s.studnr=t.studnr and t.grade=(select min(t2.grade) from test t2 full outer join professors p on t2.studnr=p.persnr where s.studnr=t2.studnr) ",
+  // /*Q4' in join (?)*/ "select s.name,t.lecturenr from students s, test t where s.studnr=t.studnr and t.grade=(select min(t2.grade) from test t2 where s.studnr=t2.studnr and t2.studnr in ( select p.persnr from professors p ) )",
+  // /*Q4'' in join (both sides correlated) (?)*/ " select s.name,t.lecturenr from students s, test t where s.studnr=t.studnr and t.grade=(select min(t2.grade) from test t2 where s.studnr=t2.studnr and s.studnr in ( select p.persnr from professors p ) ) ",
+  // /*Q5' anti in join (?)*/ "select s.name,t.lecturenr from students s, test t where s.studnr=t.studnr and t.grade=(select min(t2.grade) from test t2 where s.studnr=t2.studnr and t2.studnr not in ( select p.persnr from professors p ) )",
+  // /*Q5'' anti in join (both sides correlated) (?)*/ "select s.name,t.lecturenr from students s, test t where s.studnr=t.studnr and t.grade=(select min(t2.grade) from test t2 where s.studnr=t2.studnr and s.studnr not in ( select p.persnr from professors p ) )",
+  // /*Q6' semi join (exists)*/ "select s.name,t.lecturenr from students s, test t where s.studnr=t.studnr and t.grade=(select min(t2.grade) from test t2 where s.studnr=t2.studnr and exists ( select p.persnr from professors p ) )",
+  // /*Q6'' semi join (exists) (both sides correlated)*/ "select s.name,t.lecturenr from students s, test t where s.studnr=t.studnr and t.grade=(select min(t2.grade) from test t2 where s.studnr=t2.studnr and exists ( select p.persnr from professors p where p.persnr=s.studnr) )",
+  // /*Q7' anti join (not exists)*/ "select s.name,t.lecturenr from students s, test t where s.studnr=t.studnr and t.grade=(select min(t2.grade) from test t2 where s.studnr=t2.studnr and not exists ( select p.persnr from professors p) )",
+  // /*Q7'' anti join (not exists) (both sides correlated)*/ "select s.name,t.lecturenr from students s, test t where s.studnr=t.studnr and t.grade=(select min(t2.grade) from test t2 where s.studnr=t2.studnr and not exists ( select p.persnr from professors p where p.persnr=s.studnr) )",
+  // /*Q8' union*/ "select s.name,t.lecturenr from students s, test t where s.studnr=t.studnr and t.grade=(select min(t3.grade) from ((select t2.studnr, t2.grade from test t2) union (select t2.studnr, t2.grade from test t2)) as t3 where s.studnr=t3.studnr )",
+  // /*Q9' intersect*/ "select s.name,t.lecturenr from students s, test t where s.studnr=t.studnr and t.grade=(select min(t3.grade) from ((select t2.studnr, t2.grade from test t2) intersect (select t2.studnr, t2.grade from test t2)) as t3 where s.studnr=t3.studnr )",
+  // /*Q10' division (except?)*/ "select s.name,t.lecturenr from students s, test t where s.studnr=t.studnr and t.grade=(select min(t3.grade) from ((select t2.studnr, t2.grade from test t2) except (select t2.studnr, t2.grade from test t2)) as t3 where s.studnr=t3.studnr )",
 };
 
 
@@ -170,6 +171,20 @@ void run_q1q2(){
   }
 }
 
+void run_q_extended(){
+  std::cout << "\n===== Q extended tests =====" << std::endl;
+  for(auto test: q_extended){
+    auto sql_to_ra = std::make_shared<SQLtoRA>();
+    std::shared_ptr<RaTree> raTree = sql_to_ra->parse(test);
+    std::cout << raTree->root->to_string() << "\n" << std::endl;
+    raTree->optimize();
+    std::cout << raTree->root->to_string() << "\n" << std::endl;
+    auto ra_to_sql = std::make_shared<RAtoSQL>(raTree);
+    std::string sql = ra_to_sql->deparse();
+    std::cout << sql << std::endl;
+  }
+}
+
 void run_tpch_correlated(){
   std::cout << "\n===== TPCH tests =====" << std::endl;
   for(auto test: tpch_correlated){
@@ -206,11 +221,12 @@ void deparse_protobuf(const char* test){
 }
 
 int main() {
-  run_tests();
+  // run_tests();
   // run_tests_correlated();
-  run_q1q2();
-  run_tpch_correlated();
-  run_tpch_uncorrelated();
+  // run_q1q2();
+  // run_tpch_correlated();
+  run_q_extended();
+  // run_tpch_uncorrelated();
   // parse_json();
   // Optional, this ensures all memory is freed upon program exit (useful when running Valgrind)
   pg_query_exit();

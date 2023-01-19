@@ -76,7 +76,8 @@ typedef enum {
     RA__JOIN__IN_LEFT = 13, // in
     RA__JOIN__IN_LEFT_DEPENDENT = 14, 
     RA__JOIN__ANTI_IN_LEFT = 15, // not in
-    RA__JOIN__ANTI_IN_LEFT_DEPENDENT = 16 
+    RA__JOIN__ANTI_IN_LEFT_DEPENDENT = 16,
+    RA__JOIN__FULL_OUTER = 17
 } Ra__Join__JoinType;
 
 typedef enum {

@@ -194,6 +194,10 @@ void SQLtoRA::find_expression_attributes(PgQuery__Node* node, std::vector<std::s
             }
             break;
         }
+        case PG_QUERY__NODE__NODE_JOIN_EXPR: {
+            PgQuery__JoinExpr* join_expr = node->join_expr;
+            find_where_expression_attributes(join_expr->quals, attributes);
+        }
         default: break;
     }
 }
@@ -454,13 +458,17 @@ bool SQLtoRA::is_correlated_subquery(PgQuery__SelectStmt* select_stmt){
         }
     }
 
-    // get all attributes used in subquery select and where
+    // get all attributes used in subquery select, where, and join predicates
     std::vector<std::shared_ptr<Ra__Node__Attribute>> attributes;
     for(size_t i=0; i<select_stmt->n_target_list; i++){
         find_expression_attributes(select_stmt->target_list[i]->res_target->val, attributes);
     }
     if(select_stmt->where_clause!=nullptr){
         find_where_expression_attributes(select_stmt->where_clause, attributes);
+    }
+    //
+    for(size_t i=0; i<select_stmt->n_from_clause; i++){
+        find_expression_attributes(select_stmt->from_clause[i], attributes);
     }
 
     // if attribute used in select/where has not been defined in from -> correlated subquery
@@ -796,7 +804,6 @@ std::shared_ptr<Ra__Node> SQLtoRA::parse_from(PgQuery__Node** from_clause, size_
             case PG_QUERY__NODE__NODE_JOIN_EXPR:{
                 PgQuery__JoinExpr* join_expr = from_clause[j]->join_expr;
                 relations.push_back(parse_from_join(join_expr));
-                
                 break;
             }
         }
