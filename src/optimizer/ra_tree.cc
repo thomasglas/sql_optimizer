@@ -477,7 +477,7 @@ void RaTree::decorrelate_subquery(std::pair<std::shared_ptr<Ra__Node>, std::shar
     for(auto& correlated_attribute: correlated_attributes){
         auto attr = std::static_pointer_cast<Ra__Node__Attribute>(correlated_attribute);
         // 2.1.2
-        d_projection->args.push_back(std::make_shared<Ra__Node__Attribute>(attr->name, attr->alias));
+        d_projection->args.push_back(std::make_shared<Ra__Node__Attribute>(attr->name));
         d_projection->subquery_columns.push_back(attr->name);
 
         // 1.1 
@@ -530,7 +530,6 @@ void RaTree::decorrelate_subquery(std::pair<std::shared_ptr<Ra__Node>, std::shar
     else{
         // 5.1
         auto cte_projection = std::make_shared<Ra__Node__Projection>();
-        // cte_projection->args.push_back(std::make_shared<Ra__Node__Attribute>("*"));
         cte_projection->childNodes.push_back(original_dep_join->childNodes[0]);
         std::string cte_name = "cte_" + std::to_string(counter++);
         cte_projection->subquery_alias = cte_name;
@@ -539,6 +538,10 @@ void RaTree::decorrelate_subquery(std::pair<std::shared_ptr<Ra__Node>, std::shar
         // 5.2
         std::vector<std::pair<std::string, std::string>> cte_relations_aliases;
         get_relations_aliases(cte_projection->childNodes[0], cte_relations_aliases);
+
+        // 5.4
+        original_dep_join->childNodes[0] = std::make_shared<Ra__Node__Relation>(cte_name);
+        d_projection->childNodes[0] = original_dep_join->childNodes[0];
 
         // 5.3
         std::vector<std::shared_ptr<Ra__Node>> attributes;
@@ -555,29 +558,29 @@ void RaTree::decorrelate_subquery(std::pair<std::shared_ptr<Ra__Node>, std::shar
             }
         }
         find_attributes_using_alias(this->root, cte_aliases, attributes);
+        std::vector<std::string> temp_select_attr_tracker;
         for(auto attribute: attributes){
             auto attr = std::static_pointer_cast<Ra__Node__Attribute>(attribute);
-            cte_projection->args.push_back(std::make_shared<Ra__Node__Attribute>(attr->name, attr->alias));
-            attr->alias = cte_name;
+            if(std::find(temp_select_attr_tracker.begin(),temp_select_attr_tracker.end(),attr->alias+attr->name)==temp_select_attr_tracker.end()){
+                temp_select_attr_tracker.push_back(attr->alias+attr->name);
+                cte_projection->args.push_back(std::make_shared<Ra__Node__Attribute>(attr->name, attr->alias));
+            }
+            // attr->alias = cte_name;
         }
 
-        // 5.4
-        original_dep_join->childNodes[0] = std::make_shared<Ra__Node__Relation>(cte_name);
-        d_projection->childNodes[0] = original_dep_join->childNodes[0];
-
         // 5.5
-        // std::map<std::pair<std::string,std::string>, std::pair<std::string,std::string>> rename_map;
-        // for(const auto& cte_relation_alias: cte_relations_aliases){
-        //     // relation has alias
-        //     if(cte_relation_alias.second!=""){
-        //         rename_map[{cte_relation_alias.second,""}] = {cte_name,""};
-        //     }
-        //     // relation has no alias
-        //     else{
-        //         rename_map[{cte_relation_alias.first,""}] = {cte_name,""};
-        //     }
-        // }
-        // rename_attributes(root, rename_map);
+        std::map<std::pair<std::string,std::string>, std::pair<std::string,std::string>> rename_map;
+        for(const auto& cte_relation_alias: cte_relations_aliases){
+            // relation has alias
+            if(cte_relation_alias.second!=""){
+                rename_map[{cte_relation_alias.second,""}] = {cte_name,""};
+            }
+            // relation has no alias
+            else{
+                rename_map[{cte_relation_alias.first,""}] = {cte_name,""};
+            }
+        }
+        rename_attributes(root, rename_map);
     }
 
 
@@ -900,29 +903,24 @@ void RaTree::push_down_dep_join(std::shared_ptr<Ra__Node>& dep_join_parent, std:
             break;
         }
         case RA__NODE__JOIN:{
-            auto join = std::static_pointer_cast<Ra__Node__Join>(dep_join->childNodes[1]);
-            switch(join->type){
+            auto child_join = std::static_pointer_cast<Ra__Node__Join>(dep_join->childNodes[1]);
+            switch(child_join->type){
                 case RA__JOIN__CROSS_PRODUCT:
                 case RA__JOIN__INNER:{
                     if(intersect_correlated_attributes(dep_join->childNodes[0],dep_join->childNodes[1]->childNodes[1]).empty()){
-                        std::shared_ptr<Ra__Node> child_join = dep_join->childNodes[1];
                         dep_join->childNodes[1] = child_join->childNodes[0];
                         child_join->childNodes[0] = dep_join;
                         dep_join_parent->childNodes[dep_join_parent_child_id] = child_join;
                     }
                     else if(intersect_correlated_attributes(dep_join->childNodes[0],dep_join->childNodes[1]->childNodes[0]).empty()){
-                        std::shared_ptr<Ra__Node> child_join = dep_join->childNodes[1];
                         dep_join->childNodes[1] = child_join->childNodes[1];
                         child_join->childNodes[1] = dep_join;
                         dep_join_parent->childNodes[dep_join_parent_child_id] = child_join;
                     }
                     else{
                         // 1. add projection to left and right side, with aliases
-                        std::shared_ptr<Ra__Node> child_join = dep_join->childNodes[1];
-
                         std::shared_ptr<Ra__Node__Projection> left_pr = std::make_shared<Ra__Node__Projection>();
                         std::shared_ptr<Ra__Node__Projection> right_pr = std::make_shared<Ra__Node__Projection>();
-                        // std::shared_ptr<Ra__Node__Join> dep_join_left = std::make_shared<Ra__Node__Join>(RA__JOIN__DEPENDENT_INNER_LEFT);
                         std::shared_ptr<Ra__Node__Join> dep_join_right = std::make_shared<Ra__Node__Join>(RA__JOIN__DEPENDENT_INNER_LEFT);
 
                         // push original dep join down left side 
@@ -931,8 +929,12 @@ void RaTree::push_down_dep_join(std::shared_ptr<Ra__Node>& dep_join_parent, std:
                         left_pr_arg->expression = std::make_shared<Ra__Node__Attribute>("*");
                         left_pr->args.push_back(left_pr_arg);
                         left_pr->childNodes.push_back(dep_join_parent->childNodes[dep_join_parent_child_id]);
-                        // dep_join_left->childNodes.push_back(dep_join->childNodes[0]); // D
                         dep_join_parent->childNodes[dep_join_parent_child_id]->childNodes[1] = child_join->childNodes[0];
+                        dep_join_parent->childNodes[dep_join_parent_child_id] = child_join; // skip dep join
+
+                        // // get select expressions
+                        // std::vector<std::pair<std::string, std::string>> cte_relations_aliases;
+                        // get_relations_aliases(cte_projection->childNodes[0], cte_relations_aliases);
                         
                         right_pr->subquery_alias = "temp_" + std::to_string(counter++);
                         auto right_pr_arg = std::make_shared<Ra__Node__Select_Expression>();
@@ -975,10 +977,10 @@ void RaTree::push_down_dep_join(std::shared_ptr<Ra__Node>& dep_join_parent, std:
                                 rename_map[{relation_alias.first,""}] = {right_pr->subquery_alias,""};
                             }
                         }
-                        rename_attributes(original_right_projection, rename_map, join);
+                        rename_attributes(original_right_projection, rename_map, child_join);
 
                         // 3. add natural join D predicates
-                        join->type = RA__JOIN__INNER;
+                        child_join->type = RA__JOIN__INNER;
                         if(d_projection->args.size()>1){
                             auto bool_p = std::make_shared<Ra__Node__Bool_Predicate>();
                             bool_p->bool_operator = RA__BOOL_OPERATOR__AND;
@@ -988,13 +990,13 @@ void RaTree::push_down_dep_join(std::shared_ptr<Ra__Node>& dep_join_parent, std:
                                 auto right = std::make_shared<Ra__Node__Attribute>(d_arg->name, right_pr->subquery_alias);
                                 bool_p->args.push_back(std::make_shared<Ra__Node__Predicate>(left, right, "="));
                             }
-                            join->predicate = bool_p;
+                            child_join->predicate = bool_p;
                         }
                         else{
                             auto d_arg = std::static_pointer_cast<Ra__Node__Attribute>(d_projection->args[0]);
                             auto left = std::make_shared<Ra__Node__Attribute>(d_arg->name, left_pr->subquery_alias);
                             auto right = std::make_shared<Ra__Node__Attribute>(d_arg->name, right_pr->subquery_alias);
-                            join->predicate = std::make_shared<Ra__Node__Predicate>(left, right, "=");
+                            child_join->predicate = std::make_shared<Ra__Node__Predicate>(left, right, "=");
                         }
 
                         // push down newly introduced dep join (right side) separately
@@ -1005,7 +1007,6 @@ void RaTree::push_down_dep_join(std::shared_ptr<Ra__Node>& dep_join_parent, std:
                         dep_join_right->type = RA__JOIN__CROSS_PRODUCT;
 
                         // setup so dep_join_parent will be set as left_pr
-                        dep_join_parent->childNodes[dep_join_parent_child_id] = child_join; // skip dep join
                         dep_join_parent = child_join;
                         dep_join_parent_child_id = 0;
                     }
