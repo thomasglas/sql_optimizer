@@ -142,7 +142,7 @@ class RaTree {
 
         bool get_join(std::shared_ptr<Ra__Node>& it);
         
-        void find_attributes_using_alias(std::shared_ptr<Ra__Node> it, std::vector<std::string>& aliases, std::vector<std::shared_ptr<Ra__Node>>& attributes);
+        void find_attributes_using_alias(std::shared_ptr<Ra__Node> it, std::vector<std::string>& aliases, std::vector<std::shared_ptr<Ra__Node>>& attributes, std::shared_ptr<Ra__Node> stop_node=nullptr, bool incl_stop_node=false);
 };
 
 #endif

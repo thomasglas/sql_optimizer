@@ -124,10 +124,12 @@ Ra__Node__Predicate::Ra__Node__Predicate(std::shared_ptr<Ra__Node> left_, std::s
     n_children = 0;
 }
 
-Ra__Node__Select_Expression::Ra__Node__Select_Expression(){
+Ra__Node__Select_Expression::Ra__Node__Select_Expression(std::shared_ptr<Ra__Node> expr)
+: expression(expr)
+{
     node_case = Ra__Node__NodeCase::RA__NODE__SELECT_EXPRESSION;
     n_children = 0;
-    expression = std::make_shared<Ra__Node__Expression>();
+    // expression = std::make_shared<Ra__Node__Expression>();
 }
 
 Ra__Node__Expression::Ra__Node__Expression(){

@@ -225,7 +225,7 @@ class Ra__Node__Predicate: public Ra__Node {
 
 class Ra__Node__Select_Expression: public Ra__Node {
     public:
-        Ra__Node__Select_Expression();
+        Ra__Node__Select_Expression(std::shared_ptr<Ra__Node> expr=nullptr);
         std::shared_ptr<Ra__Node> expression;
         std::string rename;
 };
