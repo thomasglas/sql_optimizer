@@ -77,7 +77,7 @@ std::vector<const char*> tpch_correlated = {
 
 
 std::vector<const char*> q_extended = {
-  /* both sides correlated */ "select s.name,t.vorlnr from studenten s, pruefen t where s.matrnr=t.matrnr and t.note=(select min(t2.note) from pruefen t2, professoren p where s.matrnr<t2.matrnr and p.persnr<t.persnr)",
+  /* both sides correlated */ "select s.name,t.vorlnr from studenten s, pruefen t where s.matrnr=t.matrnr and t.note=(select min(t2.note) from pruefen t2, professoren p where s.matrnr=t2.matrnr and p.persnr=t.persnr)",
   // /*Q0' multiple correlations */ "select s.name,t.lecturenr from students s, test t where s.studnr=t.studnr and t.grade=(select min(t2.grade) from test t2 where s.studnr=t2.studnr) and t.grade=(select max(t2.grade) from test t2 where s.studnr=t2.studnr)",
   // /*Q1' inner join (both sides correlated)*/ "select s.name,t.lecturenr from students s, test t where s.studnr=t.studnr and t.grade=(select min(t2.grade) from test t2 join professors p on s.studnr=t2.studnr and p.persnr=t.persnr)",
   // /*Q2' left outer join*/ "select s.name,t.lecturenr from students s, test t where s.studnr=t.studnr and t.grade=(select min(t2.grade) from test t2 left join professors p on t2.studnr=p.persnr where s.studnr=t2.studnr)",

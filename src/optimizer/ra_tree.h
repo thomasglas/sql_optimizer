@@ -5,6 +5,7 @@
 #include <set>
 #include <unordered_map>
 #include <map>
+#include <queue>
 
 class RaTree {
     public:
@@ -61,7 +62,7 @@ class RaTree {
 
         std::tuple<std::shared_ptr<Ra__Node>,std::shared_ptr<Ra__Node>,std::string> is_correlating_predicate(std::shared_ptr<Ra__Node__Predicate> p, const std::vector<std::pair<std::string,std::string>>& relations_aliases);
 
-        void push_down_dep_join(std::shared_ptr<Ra__Node>& dep_join_parent, std::shared_ptr<Ra__Node> original_right_projection);
+        void push_down_dep_join(std::shared_ptr<Ra__Node__Join> dep_join, std::shared_ptr<Ra__Node> original_right_projection, std::queue<std::shared_ptr<Ra__Node__Join>>& push_down_dep_joins_queue);
 
         void push_down_predicates();
 
@@ -125,6 +126,8 @@ class RaTree {
         void get_correlating_predicates(std::shared_ptr<Ra__Node> it, std::vector<std::tuple<std::shared_ptr<Ra__Node>,std::shared_ptr<Ra__Node>,std::string,size_t>>& correlating_predicates, bool& is_boolean_predicate, std::vector<std::pair<std::string,std::string>> relations_aliases);
 
         bool can_decouple(std::shared_ptr<Ra__Node> selection, const std::vector<std::shared_ptr<Ra__Node>>& d_args, std::map<std::pair<std::string,std::string>, std::pair<std::string,std::string>>& d_rename_map);
+
+        bool can_decouple2(std::shared_ptr<Ra__Node__Join> dep_join, std::shared_ptr<Ra__Node> parent_projection, std::map<std::pair<std::string,std::string>, std::pair<std::string,std::string>>& d_rename_map);
 
         void rename_attributes(std::shared_ptr<Ra__Node> it, std::map<std::pair<std::string,std::string>, std::pair<std::string,std::string>> rename_map, std::shared_ptr<Ra__Node> stop_node=nullptr);
 
