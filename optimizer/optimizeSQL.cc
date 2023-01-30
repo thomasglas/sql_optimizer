@@ -75,6 +75,9 @@ std::vector<const char*> tpch_correlated = {
   /*Q22*/ "select cntrycode, count(*) as numcust, sum(c_acctbal) as totacctbal from (select substring(c_phone from 1 for 2) as cntrycode, c_acctbal from customer where substring(c_phone from 1 for 2) in ('13','31','23','29','30','18','17') and c_acctbal>(select avg(c_acctbal) from customer where c_acctbal>0.00 and substring (c_phone from 1 for 2) in ('13','31','23','29','30','18','17')) and not exists (select * from orders where o_custkey=c_custkey)) as custsale group by cntrycode order by cntrycode",
 };
 
+std::vector<const char*> tpch_extended = {
+  "select l.l_partkey, l.l_suppkey from lineitem l, partsupp ps where l.l_partkey=ps.ps_partkey and l.l_quantity=( select max(l2.l_quantity) from lineitem l2, part p where l2.l_partkey=ps.ps_partkey and p.p_partkey=ps.ps_partkey )"
+};
 
 std::vector<const char*> q_extended = {
   /* both sides correlated */ "select s.name,t.vorlnr from studenten s, pruefen t where s.matrnr=t.matrnr and t.note=(select min(t2.note) from pruefen t2, professoren p where s.matrnr=t2.matrnr and p.persnr=t.persnr)",
@@ -115,6 +118,8 @@ std::vector<const char*> tpch_uncorrelated = {
   /*Q18*/ "select c_name, c_custkey, o_orderkey, o_orderdate, o_totalprice, sum(l_quantity) from customer, orders, lineitem where o_orderkey in ( select l_orderkey from lineitem group by l_orderkey having sum(l_quantity) > 300 ) and c_custkey = o_custkey and o_orderkey = l_orderkey group by c_name, c_custkey, o_orderkey, o_orderdate, o_totalprice order by o_totalprice desc, o_orderdate",
   /*Q19*/ "select sum(l_extendedprice* (1 - l_discount)) as revenue from lineitem, part where ( p_partkey = l_partkey and p_brand = 'Brand#12' and p_container in ('SM CASE', 'SM BOX', 'SM PACK', 'SM PKG') and l_quantity >= 1 and l_quantity <= 1 + 10 and p_size between 1 and 5 and l_shipmode in ('AIR', 'AIR REG') and l_shipinstruct = 'DELIVER IN PERSON' ) or ( p_partkey = l_partkey and p_brand = 'Brand#23' and p_container in ('MED BAG', 'MED BOX', 'MED PKG', 'MED PACK') and l_quantity >= 10 and l_quantity <= 10 + 10 and p_size between 1 and 10 and l_shipmode in ('AIR', 'AIR REG') and l_shipinstruct = 'DELIVER IN PERSON' ) or ( p_partkey = l_partkey and p_brand = 'Brand#34' and p_container in ('LG CASE', 'LG BOX', 'LG PACK', 'LG PKG') and l_quantity >= 20 and l_quantity <= 20 + 10 and p_size between 1 and 15 and l_shipmode in ('AIR', 'AIR REG') and l_shipinstruct = 'DELIVER IN PERSON' )",
   };
+
+
 
 void parse_json(){
 
@@ -185,6 +190,20 @@ void run_q_extended(){
   }
 }
 
+void run_tpch_extended(){
+  std::cout << "\n===== TPCH extended tests =====" << std::endl;
+  for(auto test: tpch_extended){
+    auto sql_to_ra = std::make_shared<SQLtoRA>();
+    std::shared_ptr<RaTree> raTree = sql_to_ra->parse(test);
+    std::cout << raTree->root->to_string() << "\n" << std::endl;
+    raTree->optimize();
+    std::cout << raTree->root->to_string() << "\n" << std::endl;
+    auto ra_to_sql = std::make_shared<RAtoSQL>(raTree);
+    std::string sql = ra_to_sql->deparse();
+    std::cout << sql << std::endl;
+  }
+}
+
 void run_tpch_correlated(){
   std::cout << "\n===== TPCH tests =====" << std::endl;
   for(auto test: tpch_correlated){
@@ -225,8 +244,9 @@ int main() {
   // run_tests_correlated();
   // run_q1q2();
   // run_tpch_correlated();
-  run_q_extended();
+  // run_q_extended();
   // run_tpch_uncorrelated();
+  run_tpch_extended();
   // parse_json();
   // Optional, this ensures all memory is freed upon program exit (useful when running Valgrind)
   pg_query_exit();

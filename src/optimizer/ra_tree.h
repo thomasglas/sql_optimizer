@@ -26,6 +26,10 @@ class RaTree {
         // to generate unique ids
         uint64_t counter;
 
+        // works: (false,true), (false,false), (true,true)
+        const bool push_down_correlating_predicates = true;
+        const bool decouple = false;
+
         /**
          * Find and decorrelate all correlated exists in tree.
          * Simply correlated: subquery is correlated through a single equi predicate

@@ -8,7 +8,6 @@ RaTree::RaTree(std::shared_ptr<Ra__Node> _root, std::vector<std::shared_ptr<Ra__
 
 void RaTree::optimize(){
     push_down_predicates();
-    std::cout << root->to_string() << std::endl;
     decorrelate_all_exists();
     decorrelate_arbitrary_queries();
     // TODO: combine CP + selection = Join
@@ -50,24 +49,26 @@ void RaTree::push_down_predicates(){
             get_predicate_relations(p_r.first, p_r.second);
         }
 
-        // preparing pushing down correlated predicates -> remove correlated relation for required relations_aliases
-        // get relations defined for selection
-        std::vector<std::pair<std::string,std::string>> defined_relations_aliases;
-        get_relations_aliases(selection->childNodes[0], defined_relations_aliases);
-        for(auto& p_r: predicates_relations){
-            // check if predicate is correlating
-            bool dummy_is_boolean_predicate;
-            std::vector<std::tuple<std::shared_ptr<Ra__Node>,std::shared_ptr<Ra__Node>,std::string,size_t>> correlating_predicates;
-            // is_correlating_predicate(std::static_pointer_cast<Ra__Node__Predicate>(p_r.first), defined_relations_aliases);
-            get_correlating_predicates(p_r.first, correlating_predicates, dummy_is_boolean_predicate, defined_relations_aliases);
-            
-            // remove correlated predicate relations from required relations_aliases
-            for(const auto& correlating_predicate: correlating_predicates){
-                std::string relation_alias = get_relation_from_attribute(std::get<0>(correlating_predicate));
-                p_r.second.erase(
-                    std::remove_if(p_r.second.begin(),p_r.second.end(),[&](std::string const& required_name){return required_name==relation_alias;}), 
-                    p_r.second.end()
-                );
+        if(push_down_correlating_predicates){
+            // preparing pushing down correlated predicates -> remove correlated relation for required relations_aliases
+            // get relations defined for selection
+            std::vector<std::pair<std::string,std::string>> defined_relations_aliases;
+            get_relations_aliases(selection->childNodes[0], defined_relations_aliases);
+            for(auto& p_r: predicates_relations){
+                // check if predicate is correlating
+                bool dummy_is_boolean_predicate;
+                std::vector<std::tuple<std::shared_ptr<Ra__Node>,std::shared_ptr<Ra__Node>,std::string,size_t>> correlating_predicates;
+                // is_correlating_predicate(std::static_pointer_cast<Ra__Node__Predicate>(p_r.first), defined_relations_aliases);
+                get_correlating_predicates(p_r.first, correlating_predicates, dummy_is_boolean_predicate, defined_relations_aliases);
+                
+                // remove correlated predicate relations from required relations_aliases
+                for(const auto& correlating_predicate: correlating_predicates){
+                    std::string relation_alias = get_relation_from_attribute(std::get<0>(correlating_predicate));
+                    p_r.second.erase(
+                        std::remove_if(p_r.second.begin(),p_r.second.end(),[&](std::string const& required_name){return required_name==relation_alias;}), 
+                        p_r.second.end()
+                    );
+                }
             }
         }
 
@@ -457,8 +458,6 @@ void RaTree::decorrelate_subquery(std::pair<std::shared_ptr<Ra__Node>, std::shar
     // 2.
     auto dep_join = std::make_shared<Ra__Node__Join>(RA__JOIN__DEPENDENT_INNER_LEFT);
     dep_join->childNodes.resize(2);
-    // dep_join->childNodes[1] = original_dep_join->childNodes[1];
-    // original_dep_join->childNodes[1] = dep_join;
     dep_join->childNodes[1] = right_projection->childNodes[0];
     right_projection->childNodes[0] = dep_join;
 
@@ -478,20 +477,27 @@ void RaTree::decorrelate_subquery(std::pair<std::shared_ptr<Ra__Node>, std::shar
     d_projection->subquery_alias = "d";
     dep_join->childNodes[0] = d_projection;
     auto correlated_attributes = intersect_correlated_attributes(dep_join->childNodes[0],dep_join->childNodes[1]->childNodes[0]);
+    std::vector<std::string> temp_duplicate_tracker;
     for(auto& correlated_attribute: correlated_attributes){
         auto attr = std::static_pointer_cast<Ra__Node__Attribute>(correlated_attribute);
-        // 2.1.2
-        d_projection->args.push_back(std::make_shared<Ra__Node__Attribute>(attr->name));
-        d_projection->subquery_columns.push_back(attr->name);
 
-        // 1.1 
-        add_predicate_to_selection(std::make_shared<Ra__Node__Predicate>(std::make_shared<Ra__Node__Attribute>(attr->name, attr->alias),std::make_shared<Ra__Node__Attribute>(subquery_alias+"_"+attr->name, subquery_alias),"="), original_dep_join_selection);
-        right_projection->subquery_columns.push_back(subquery_alias+"_"+attr->name);
+        // duplicate check
+        if(std::find(temp_duplicate_tracker.begin(),temp_duplicate_tracker.end(),attr->alias+attr->name)==temp_duplicate_tracker.end()){
+            temp_duplicate_tracker.push_back(attr->alias+attr->name);
 
+            right_projection->args.push_back(std::make_shared<Ra__Node__Attribute>(attr->name, "d"));
+        
+            // 2.1.2
+            d_projection->args.push_back(std::make_shared<Ra__Node__Attribute>(attr->name));
+            d_projection->subquery_columns.push_back(attr->name);
+
+            // 1.1 
+            add_predicate_to_selection(std::make_shared<Ra__Node__Predicate>(std::make_shared<Ra__Node__Attribute>(attr->name, attr->alias),std::make_shared<Ra__Node__Attribute>(subquery_alias+"_"+attr->name, subquery_alias),"="), original_dep_join_selection);
+            right_projection->subquery_columns.push_back(subquery_alias+"_"+attr->name);
+        }
+        
         // 2.2
         attr->alias = "d";
-        right_projection->args.push_back(std::make_shared<Ra__Node__Attribute>(attr->name, attr->alias));
-        
     }
 
     // ---------------- START: NEW MULTI DEP JOIN APPROACH
@@ -515,6 +521,7 @@ void RaTree::decorrelate_subquery(std::pair<std::shared_ptr<Ra__Node>, std::shar
         push_down_dep_joins_queue.pop();
     }
 
+
     // decouple
         // loop throuh dep join vector
         // decouple if possible: check "d" predicates going up to first parent projection
@@ -522,9 +529,6 @@ void RaTree::decorrelate_subquery(std::pair<std::shared_ptr<Ra__Node>, std::shar
     bool cte_already_setup = false;
     std::map<std::pair<std::string,std::string>, std::pair<std::string,std::string>> rename_d_attributes;
     for(auto dep_join_: dep_joins_vector){
-        std::cout << std::endl;
-        std::cout << right_projection->to_string() << std::endl;
-        std::cout << dep_join_->to_string() << std::endl;
         dep_join_->type = RA__JOIN__CROSS_PRODUCT;
 
         // find dep join parent
@@ -544,7 +548,7 @@ void RaTree::decorrelate_subquery(std::pair<std::shared_ptr<Ra__Node>, std::shar
             parent_projection = right_projection;
         }
 
-        if(can_decouple2(dep_join_, parent_projection, rename_d_attributes)){
+        if(decouple && can_decouple2(dep_join_, parent_projection, rename_d_attributes)){
 
             // remove join
             dep_join_parent->childNodes[dep_join_parent_child_id] = dep_join_parent->childNodes[dep_join_parent_child_id]->childNodes[1];
@@ -1170,6 +1174,7 @@ void RaTree::push_down_dep_join(std::shared_ptr<Ra__Node__Join> dep_join, std::s
                             if(std::find(temp_select_attr_tracker.begin(),temp_select_attr_tracker.end(),attr->alias+attr->name)==temp_select_attr_tracker.end()){
                                 temp_select_attr_tracker.push_back(attr->alias+attr->name);
                                 left_pr->args.push_back(std::make_shared<Ra__Node__Select_Expression>(std::make_shared<Ra__Node__Attribute>(attr->name, attr->alias)));
+                                left_pr->subquery_columns.push_back(attr->name);
                             }
                         }
                         // add d_attributes separately
@@ -1181,6 +1186,7 @@ void RaTree::push_down_dep_join(std::shared_ptr<Ra__Node__Join> dep_join, std::s
                             if(std::find(temp_select_attr_tracker.begin(),temp_select_attr_tracker.end(),attr->alias+attr->name)==temp_select_attr_tracker.end()){
                                 temp_select_attr_tracker.push_back(attr->alias+attr->name);
                                 left_pr->args.push_back(std::make_shared<Ra__Node__Select_Expression>(std::make_shared<Ra__Node__Attribute>(attr->name, attr->alias)));
+                                left_pr->subquery_columns.push_back(attr->name);
                             }
                         }
 
@@ -1209,16 +1215,18 @@ void RaTree::push_down_dep_join(std::shared_ptr<Ra__Node__Join> dep_join, std::s
                             if(std::find(temp_select_attr_tracker.begin(),temp_select_attr_tracker.end(),attr->alias+attr->name)==temp_select_attr_tracker.end()){
                                 temp_select_attr_tracker.push_back(attr->alias+attr->name);
                                 right_pr->args.push_back(std::make_shared<Ra__Node__Select_Expression>(std::make_shared<Ra__Node__Attribute>(attr->name, attr->alias)));
+                                right_pr->subquery_columns.push_back(attr->name);
                             }
                         }
                         // add d_attributes separately
                         std::vector<std::shared_ptr<Ra__Node>> right_attributes_with_alias;
-                        find_attributes_using_alias(dep_join->childNodes[1], aliases_to_find, right_attributes_with_alias);
+                        find_attributes_using_alias(dep_join_right->childNodes[1], aliases_to_find, right_attributes_with_alias);
                         for(auto attribute: right_attributes_with_alias){
                             auto attr = std::static_pointer_cast<Ra__Node__Attribute>(attribute);
                             if(std::find(temp_select_attr_tracker.begin(),temp_select_attr_tracker.end(),attr->alias+attr->name)==temp_select_attr_tracker.end()){
                                 temp_select_attr_tracker.push_back(attr->alias+attr->name);
-                                left_pr->args.push_back(std::make_shared<Ra__Node__Select_Expression>(std::make_shared<Ra__Node__Attribute>(attr->name, attr->alias)));
+                                right_pr->args.push_back(std::make_shared<Ra__Node__Select_Expression>(std::make_shared<Ra__Node__Attribute>(attr->name, attr->alias)));
+                                right_pr->subquery_columns.push_back(attr->name);
                             }
                         }
 
@@ -1226,25 +1234,57 @@ void RaTree::push_down_dep_join(std::shared_ptr<Ra__Node__Join> dep_join, std::s
                         // d -> either left or right alias
                         // rename relations defined in left/right side to their subquery alias
                         std::map<std::pair<std::string,std::string>, std::pair<std::string,std::string>> rename_map;
-                        // rename_map[{"d",""}] = {left_pr->subquery_alias,""};
-                        for(auto relation_alias: left_relations_aliases){
-                            // relation has alias
-                            if(relation_alias.second!=""){
-                                rename_map[{relation_alias.second,""}] = {left_pr->subquery_alias,""};
-                            }
-                            // relation has no alias
-                            else{
-                                rename_map[{relation_alias.first,""}] = {left_pr->subquery_alias,""};
+                        // for(auto relation_alias: left_relations_aliases){
+                        //     // relation has alias
+                        //     if(relation_alias.second!=""){
+                        //         rename_map[{relation_alias.second,""}] = {left_pr->subquery_alias,""};
+                        //     }
+                        //     // relation has no alias
+                        //     else{
+                        //         rename_map[{relation_alias.first,""}] = {left_pr->subquery_alias,""};
+                        //     }
+                        // }
+                        // for(auto relation_alias: right_relations_aliases){
+                        //     // relation has alias
+                        //     if(relation_alias.second!=""){
+                        //         rename_map[{relation_alias.second,""}] = {right_pr->subquery_alias,""};
+                        //     }
+                        //     // relation has no alias
+                        //     else{
+                        //         rename_map[{relation_alias.first,""}] = {right_pr->subquery_alias,""};
+                        //     }
+                        // }
+
+                        for(auto arg: left_pr->args){
+                            auto expression = std::static_pointer_cast<Ra__Node__Select_Expression>(arg)->expression;
+                            assert(expression->node_case==RA__NODE__ATTRIBUTE);
+                            auto attribute = std::static_pointer_cast<Ra__Node__Attribute>(expression);
+                            rename_map[{"d",attribute->name}] = {left_pr->subquery_alias,attribute->name};
+                            for(auto relation_alias: left_relations_aliases){
+                                // relation has alias
+                                if(relation_alias.second!=""){
+                                    rename_map[{relation_alias.second,attribute->name}] = {left_pr->subquery_alias,attribute->name};
+                                }
+                                // relation has no alias
+                                else{
+                                    rename_map[{relation_alias.first,attribute->name}] = {left_pr->subquery_alias,attribute->name};
+                                }
                             }
                         }
-                        for(auto relation_alias: right_relations_aliases){
-                            // relation has alias
-                            if(relation_alias.second!=""){
-                                rename_map[{relation_alias.second,""}] = {right_pr->subquery_alias,""};
-                            }
-                            // relation has no alias
-                            else{
-                                rename_map[{relation_alias.first,""}] = {right_pr->subquery_alias,""};
+                        for(auto arg: right_pr->args){
+                            auto expression = std::static_pointer_cast<Ra__Node__Select_Expression>(arg)->expression;
+                            assert(expression->node_case==RA__NODE__ATTRIBUTE);
+                            auto attribute = std::static_pointer_cast<Ra__Node__Attribute>(expression);
+                            rename_map[{"d",attribute->name}] = {right_pr->subquery_alias,attribute->name};
+                            for(auto relation_alias: right_relations_aliases){
+                                // relation has alias
+                                if(relation_alias.second!=""){
+                                    rename_map[{relation_alias.second,attribute->name}] = {right_pr->subquery_alias,attribute->name};
+                                }
+                                // relation has no alias
+                                else{
+                                    rename_map[{relation_alias.first,attribute->name}] = {right_pr->subquery_alias,attribute->name};
+                                }
                             }
                         }
                         rename_attributes(original_right_projection, rename_map, child_join);
@@ -1259,6 +1299,7 @@ void RaTree::push_down_dep_join(std::shared_ptr<Ra__Node__Join> dep_join, std::s
                                     auto left = std::make_shared<Ra__Node__Attribute>(l_attr->name, left_pr->subquery_alias);
                                     auto right = std::make_shared<Ra__Node__Attribute>(r_attr->name, right_pr->subquery_alias);
                                     natural_join_D_predicates.push_back(std::make_shared<Ra__Node__Predicate>(left, right, "="));
+                                    break;
                                 }
                             }
                         }
@@ -1274,17 +1315,14 @@ void RaTree::push_down_dep_join(std::shared_ptr<Ra__Node__Join> dep_join, std::s
                             }
                             child_join->predicate = bool_p;
                         }
-                        else{
-                            child_join->type = RA__JOIN__CROSS_PRODUCT;
+                        else if(natural_join_D_predicates.size()==1){
+                            child_join->type = RA__JOIN__INNER;
                             child_join->predicate = natural_join_D_predicates[0];
                         }
+                        else{
+                            child_join->type = RA__JOIN__CROSS_PRODUCT;
+                        }
 
-                        // // push down newly introduced dep join (right side) separately
-                        // std::shared_ptr<Ra__Node> dep_join_right_parent = right_pr;
-                        // while(!intersect_correlated_attributes(dep_join_right->childNodes[0],dep_join_right->childNodes[1]).empty()){
-                        //     push_down_dep_join(dep_join_right_parent, original_right_projection);
-                        // }
-                        // dep_join_right->type = RA__JOIN__CROSS_PRODUCT;
                         push_down_dep_joins_queue.push(dep_join_right);
 
                         // setup so dep_join_parent will be set as left_pr at end of function
