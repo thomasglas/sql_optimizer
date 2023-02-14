@@ -332,50 +332,6 @@ std::shared_ptr<Ra__Node> SQLtoRA::parse_where_in_subquery(PgQuery__SubLink* sub
     parse_expression(sub_link->testexpr, p->left, dummy_has_aggregate);
     join->predicate = p;
 
-    // // predicate to transform "in" into "exists"
-    // Ra__Node__Predicate* eq_predicate = new Ra__Node__Predicate();
-    // eq_predicate->binaryOperator = "=";
-    // bool dummy_has_aggregate;
-    // parse_expression(sub_link->testexpr, &(eq_predicate->left), dummy_has_aggregate);
-    // auto select_expression = static_cast<Ra__Node__Select_Expression*>(static_cast<Ra__Node__Projection*>(subquery_root)->args[0]);
-    // eq_predicate->right = select_expression->expression;
-
-    // // not null check; "in" operator can return null, exists only true/false
-    // Ra__Node__Null_Test* null_test = new Ra__Node__Null_Test();
-    // null_test->type = RA__NULL_TEST__IS_NOT_NULL;
-    // null_test->arg = eq_predicate->left;
-
-    // // bool and predicate
-    // auto bool_and = new Ra__Node__Bool_Predicate();
-    // bool_and->bool_operator = RA__BOOL_OPERATOR__AND;
-    // bool_and->args.push_back(eq_predicate);
-    // bool_and->args.push_back(null_test);
-
-    // // find subquery selection node, if exists, else create new selection node
-    // Ra__Node** it = &subquery_root;
-    // while((*it)->childNodes[0]->n_children==1){
-    //     it = &((*it)->childNodes[0]);
-    //     if((*it)->node_case==RA__NODE__SELECTION){
-    //         break;
-    //     }
-    // }
-    // if((*it)->node_case==RA__NODE__SELECTION){
-    //     auto sel = static_cast<Ra__Node__Selection*>(*it);
-    //     // add new predicates to original predicate
-    //     bool_and->args.push_back(sel->predicate);
-
-    //     // replace old selection predicate with new predicate
-    //     sel->predicate = bool_and;
-    // }
-    // // add selection if subquery has none
-    // else{
-    //     Ra__Node__Selection* sel = new Ra__Node__Selection();
-    //     sel->predicate = bool_and;
-
-    //     sel->childNodes.push_back((*it)->childNodes[0]);
-    //     (*it)->childNodes[0] = sel;
-    // }
-
     join->childNodes.push_back(subquery_root);
     return join;
 };
@@ -407,12 +363,7 @@ std::shared_ptr<Ra__Node> SQLtoRA::parse_where_exists_subquery(PgQuery__SelectSt
 bool SQLtoRA::is_tpch_attribute(std::string attr, std::string relation){
     std::string::size_type pos = attr.find('_');
     std::string attr_prefix;
-    // if (pos != std::string::npos){
-        attr_prefix = attr.substr(0, pos);
-    // }
-    // else{
-    //     return false; // "_" not found
-    // }
+    attr_prefix = attr.substr(0, pos);
 
     if(attr_prefix=="p" && relation=="part"
         || attr_prefix=="s" && relation=="supplier"
@@ -489,22 +440,6 @@ bool SQLtoRA::is_correlated_subquery(PgQuery__SelectStmt* select_stmt){
                 break;
             }
         }
-        // why do we check ctes here?
-        // // check ctes
-        // for(const auto& cte: ctes){
-        //     auto cte_pr = static_cast<Ra__Node__Projection*>(cte);
-        //     if(attr->alias.length()>0 && attr->alias==cte_pr->subquery_alias){
-        //         found = true;
-        //         break;
-        //     }
-        //     for(auto& cte_attr: cte_pr->subquery_columns){
-        //         if(attr->name==cte_attr){
-        //             found = true;
-        //             break;
-        //         }
-        //     }
-        //     if(found) break;
-        // }
         if(!found) return true; // is correlated subquery
     }
 

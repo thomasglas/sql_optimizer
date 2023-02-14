@@ -24,17 +24,17 @@ std::vector<const char*> tests = {
   "SELECT s.id+5-2 from students s where s.id-4<>1",
   "SELECT max(s.id, foo), min(s.id+4), max(s.id)+4 from students s",
   "select s.name from students s where s.id = (select min(s2.id) from students s2 where s2.id>1)", 
-  "select * from students where a=1 and (b=2 or c=3)",
-  "select grade from exams group by sid, name having sid=1",
-  "select sid from exams order by grade asc, semester desc",
+  "select * from students s where s.a=1 and (s.b=2 or s.c=3)",
+  "select grade from exams e group by e.sid, name having e.sid=1",
+  "select e.sid from exams e order by e.grade asc, e.semester desc",
   "select -id from students",
-  "select name from students having sid=2",
-  "select name from students group by name having min(id)>2",
-  "select name from students where name like '%glas'",
-  "select name from students where name not like '%glas'",
+  "select s.name from students s having s.sid=2",
+  "select s.name from students s group by s.name having min(id)>2",
+  "select s.name from students s where s.name like '%glas'",
+  "select s.name from students s where s.name not like '%glas'",
   "select * from students, profs, exams, lectures",
-  "select * from students where year = date '1999'",
-  "select * from students where year < date '1999' + interval '3' day",
+  "select * from students s where s.year = date '1999'",
+  "select * from students s where s.year < date '1999' + interval '3' day",
   "select substring(name from 1 for 2) from students",
   "select (1-id)*5 as foo from students",
   "select id from students where id between min(id) and 5",
@@ -44,7 +44,7 @@ std::vector<const char*> tests = {
   "select extract(year from _date) from students",
   "select * from (students s left outer join professors p on s.id=p.id) as s2(col1, col2)",
   "with foo(a,b) as (select a,b from students) select * from foo",
-  "select * from students s where id is null and name is not null",
+  "select * from students s where s.id is null and s.name is not null",
   "select s2.sid from (select s.id, s.name from students s) as s2(sid,firstname)",
 };
 
@@ -76,7 +76,8 @@ std::vector<const char*> tpch_correlated = {
 };
 
 std::vector<const char*> tpch_extended = {
-  "select l.l_partkey, l.l_suppkey from lineitem l, partsupp ps where l.l_partkey=ps.ps_partkey and l.l_quantity=( select max(l2.l_quantity) from lineitem l2, part p where l2.l_partkey=ps.ps_partkey and p.p_partkey=ps.ps_partkey )"
+  // "select l.l_partkey, l.l_suppkey from lineitem l, partsupp ps where l.l_partkey=ps.ps_partkey and l.l_quantity=( select max(l2.l_quantity) from lineitem l2, part p where l2.l_partkey=ps.ps_partkey and p.p_partkey=ps.ps_partkey )",
+  "select l.l_partkey, l.l_suppkey from lineitem l, partsupp ps where l.l_partkey=ps.ps_partkey and l.l_partkey<10 and l.l_quantity=( select max(l2.l_quantity) from lineitem l2, part p where l2.l_partkey=ps.ps_partkey and p.p_partkey=ps.ps_partkey )"
 };
 
 std::vector<const char*> q_extended = {
@@ -142,7 +143,8 @@ void run_tests(){
   for(auto test: tests){
     auto sql_to_ra = std::make_shared<SQLtoRA>();
     std::shared_ptr<RaTree> raTree = sql_to_ra->parse(test);
-    // std::cout << raTree->root->to_string() <<std::endl;
+    raTree->optimize();
+    std::cout << raTree->root->to_string() << "\n" << std::endl;
     auto ra_to_sql = std::make_shared<RAtoSQL>(raTree);
     std::string sql = ra_to_sql->deparse();
     std::cout << sql << std::endl;
@@ -243,9 +245,9 @@ int main() {
   // run_tests();
   // run_tests_correlated();
   // run_q1q2();
-  // run_tpch_correlated();
   // run_q_extended();
-  // run_tpch_uncorrelated();
+  run_tpch_correlated();
+  run_tpch_uncorrelated();
   run_tpch_extended();
   // parse_json();
   // Optional, this ensures all memory is freed upon program exit (useful when running Valgrind)
