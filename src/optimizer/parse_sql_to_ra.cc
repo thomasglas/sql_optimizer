@@ -240,7 +240,6 @@ std::shared_ptr<Ra__Node> SQLtoRA::parse_select(PgQuery__SelectStmt* select_stmt
     return pr;
 }
 
-// TODO: if is correlated, then parent should be dependent join
 std::shared_ptr<Ra__Node> SQLtoRA::parse_from_subquery(PgQuery__RangeSubselect* range_subselect){
     // ->subquery->select_stmt
     std::shared_ptr<Ra__Node> result;
@@ -252,6 +251,7 @@ std::shared_ptr<Ra__Node> SQLtoRA::parse_from_subquery(PgQuery__RangeSubselect* 
     }
 
     if(is_correlated_subquery(range_subselect->subquery->select_stmt)){
+        // TODO: if subquery in from clause is correlated, then parent should be dependent join
         std::cout << "correlated subquery in from clause is not supported" << std::endl;
     }
     else{

@@ -31,6 +31,10 @@ class RaTree {
         const bool decouple = true;
         const bool convert_cp_to_join = true;
 
+        void decorrelate_all_exists_in_subqueries();
+
+        void decorrelate_exists_in_subquery(std::pair<std::shared_ptr<Ra__Node>, std::shared_ptr<Ra__Node>> marker_join);
+
         /**
          * Find and decorrelate all correlated exists in tree.
          */
@@ -86,7 +90,7 @@ class RaTree {
          * @param markers vector which is filled with all found subquery markers (pair.second is filled with nullptr, will later be used for corresponding subquery nodes)
          * @param marker_type type of subquery markers to find
          */
-        void find_subquery_markers(std::shared_ptr<Ra__Node> it, std::vector<std::pair<std::shared_ptr<Ra__Node>, std::shared_ptr<Ra__Node>>>& markers, Ra__Join__JoinType marker_type);
+        void find_subquery_markers(std::shared_ptr<Ra__Node> it, std::vector<std::pair<std::shared_ptr<Ra__Node>, std::shared_ptr<Ra__Node>>>& markers, std::vector<Ra__Join__JoinType> marker_types);
 
         /**
          * Recursively find all join nodes corresponding to given subquery markers
@@ -112,7 +116,7 @@ class RaTree {
         std::tuple<std::shared_ptr<Ra__Node>,std::shared_ptr<Ra__Node>,std::string> is_correlating_predicate(std::shared_ptr<Ra__Node__Predicate> p, const std::vector<std::pair<std::string,std::string>>& relations_aliases);
 
         /**
-         * Get correlating predicates in a subtree
+         * Get correlating predicates in a predicate
          * @param it pointer to subtree
          * @param correlating_predicates vector to fill with correlating predicates (left, right, operator, child_index)
          * @param is_boolean_predicate true if correlating predicate is part of a boolean predicate

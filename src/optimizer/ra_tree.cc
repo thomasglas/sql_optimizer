@@ -8,7 +8,7 @@ RaTree::RaTree(std::shared_ptr<Ra__Node> _root, std::vector<std::shared_ptr<Ra__
 
 void RaTree::optimize(){
     push_down_predicates(false);
-    // decorrelate_all_exists();
+    decorrelate_all_exists_in_subqueries();
     decorrelate_arbitrary_queries();
     push_down_predicates(convert_cp_to_join);
 }
@@ -98,6 +98,117 @@ void RaTree::push_down_predicates(bool cp_to_join){
             selection.first->childNodes.pop_back();
         }
     }
+}
+
+void RaTree::decorrelate_all_exists_in_subqueries(){
+    // find marker in selection
+    std::vector<std::pair<std::shared_ptr<Ra__Node>, std::shared_ptr<Ra__Node>>> markers_joins; // markers, joins
+    
+    // 1.
+    find_subquery_markers(root, markers_joins, {RA__JOIN__SEMI_LEFT_DEPENDENT,RA__JOIN__ANTI_LEFT_DEPENDENT,RA__JOIN__IN_LEFT_DEPENDENT,RA__JOIN__ANTI_IN_LEFT_DEPENDENT});
+
+    // 2.
+    find_joins_by_markers(root, markers_joins);
+
+    // 3. loop in reverse, to decorrelate most nested exists first
+    for(int i=markers_joins.size()-1; i>=0; i--){
+        // assert each marker found corresponding join
+        assert(markers_joins[i].second!=nullptr);
+        decorrelate_exists_in_subquery(markers_joins[i]);
+    };
+}
+
+// decorrelate exists/!exists & in/!in
+void RaTree::decorrelate_exists_in_subquery(std::pair<std::shared_ptr<Ra__Node>, std::shared_ptr<Ra__Node>> marker_join){
+    // 2. find correlating predicates and attributes
+    // 3. move subquery into CTE
+        // 3.1 remove correlating predicates
+    // 4. in original subquery, select where on correlating attributes
+
+    std::shared_ptr<Ra__Node> subquery_projection = (marker_join.second)->childNodes[1];
+
+    // 2.
+    // get defined relations and their aliases
+    std::vector<std::pair<std::string,std::string>> relations_aliases;
+    std::shared_ptr<Ra__Node> it = subquery_projection->childNodes[0];
+    get_relations_aliases(it, relations_aliases);
+    // find (first & only) selection in correlated subquery
+    it = subquery_projection->childNodes[0];
+    // correlated exists must have selection
+    assert(get_first_selection(it));
+    auto sel = std::static_pointer_cast<Ra__Node__Selection>(it);
+
+    std::vector<std::tuple<std::shared_ptr<Ra__Node>,std::shared_ptr<Ra__Node>,std::string,size_t>> correlating_predicates;
+    bool is_boolean_predicate = false;
+    get_correlating_predicates(sel->predicate, correlating_predicates, is_boolean_predicate, relations_aliases);
+    
+    // 3.
+    auto cte_projection = std::make_shared<Ra__Node__Projection>();
+    cte_projection->childNodes.push_back(subquery_projection->childNodes[0]);
+    std::string cte_name = "cte_" + std::to_string(counter++);
+    cte_projection->subquery_alias = cte_name;
+    for(auto correlating_predicate: correlating_predicates){
+        auto inner_attribute = std::static_pointer_cast<Ra__Node__Attribute>(std::get<1>(correlating_predicate));
+        cte_projection->args.push_back(inner_attribute);
+        cte_projection->subquery_columns.push_back(inner_attribute->name);
+    }
+    ctes.push_back(cte_projection);
+
+    // 3.1
+    if(!is_boolean_predicate){
+        it = subquery_projection;
+        int child_index = -1;
+        get_node_parent(it, sel, child_index);
+        assert(it->n_children==1 && child_index==0); // parent should have single child
+        it->childNodes[child_index] = sel->childNodes[0];
+        sel->childNodes.pop_back();
+    }
+    // if part of boolean predicate
+    else{
+        auto bool_p = std::static_pointer_cast<Ra__Node__Bool_Predicate>(sel->predicate);
+        assert(bool_p->args.size()>1);
+        // sort descending based on child index
+        std::sort(begin(correlating_predicates), end(correlating_predicates), [](auto const &t1, auto const &t2) {
+                return std::get<3>(t1) > std::get<3>(t2);
+        });
+        for(auto correlating_predicate: correlating_predicates){
+            bool_p->args.erase(bool_p->args.begin() + std::get<3>(correlating_predicate));
+        }
+        // if only 1 predicate left, convert boolean to single normal predicate
+        if(bool_p->args.size()==1){
+            sel->predicate = bool_p->args[0];
+            bool_p->args.pop_back();
+        }
+    }
+
+    // 4.
+    auto new_subquery_selection = std::make_shared<Ra__Node__Selection>();
+    if(correlating_predicates.size()==1){
+        auto outer_attribute = std::static_pointer_cast<Ra__Node__Attribute>(std::get<0>(correlating_predicates[0]));
+        auto inner_attribute = std::static_pointer_cast<Ra__Node__Attribute>(std::get<1>(correlating_predicates[0]));
+        auto left = std::make_shared<Ra__Node__Attribute>(inner_attribute->name, cte_name);
+        auto right = std::make_shared<Ra__Node__Attribute>(outer_attribute->name, outer_attribute->alias);
+        new_subquery_selection->predicate = std::make_shared<Ra__Node__Predicate>(left, right, std::get<2>(correlating_predicates[0]));
+    }
+    else{
+        auto bool_p = std::make_shared<Ra__Node__Bool_Predicate>();
+        bool_p->bool_operator = RA__BOOL_OPERATOR__AND;
+        for(auto correlating_predicate: correlating_predicates){
+            auto outer_attribute = std::static_pointer_cast<Ra__Node__Attribute>(std::get<0>(correlating_predicate));
+            auto inner_attribute = std::static_pointer_cast<Ra__Node__Attribute>(std::get<1>(correlating_predicate));
+            auto left = std::make_shared<Ra__Node__Attribute>(inner_attribute->name, cte_name);
+            auto right = std::make_shared<Ra__Node__Attribute>(outer_attribute->name, outer_attribute->alias);
+            bool_p->args.push_back(std::make_shared<Ra__Node__Predicate>(left, right, std::get<2>(correlating_predicate)));
+        }
+    }
+
+    new_subquery_selection->childNodes.push_back(std::make_shared<Ra__Node__Relation>(cte_name));
+    auto new_subquery_projection = std::make_shared<Ra__Node__Projection>();
+    new_subquery_projection->args = std::static_pointer_cast<Ra__Node__Projection>(subquery_projection)->args;
+    // new_subquery_projection->args.push_back(std::make_shared<Ra__Node__Attribute>("*"));
+    new_subquery_projection->childNodes.push_back(new_subquery_selection);
+    
+    (marker_join.second)->childNodes[1] = new_subquery_projection;
 }
 
 void RaTree::add_predicate_to_selection(std::shared_ptr<Ra__Node> predicate, std::shared_ptr<Ra__Node> selection){
@@ -406,7 +517,7 @@ void RaTree::decorrelate_arbitrary_queries(){
     std::vector<std::pair<std::shared_ptr<Ra__Node>, std::shared_ptr<Ra__Node>>> markers_joins; // markers, joins
     
     // 1.
-    find_subquery_markers(root, markers_joins, RA__JOIN__DEPENDENT_INNER_LEFT);
+    find_subquery_markers(root, markers_joins, {RA__JOIN__DEPENDENT_INNER_LEFT});
 
     // 2.
     find_joins_by_markers(root, markers_joins);
@@ -1414,8 +1525,7 @@ void RaTree::decorrelate_all_exists(){
     std::vector<std::pair<std::shared_ptr<Ra__Node>, std::shared_ptr<Ra__Node>>> markers_joins; // markers, joins
     
     // 1.
-    find_subquery_markers(root, markers_joins, RA__JOIN__SEMI_LEFT_DEPENDENT);
-    find_subquery_markers(root, markers_joins, RA__JOIN__ANTI_LEFT_DEPENDENT);
+    find_subquery_markers(root, markers_joins, {RA__JOIN__SEMI_LEFT_DEPENDENT,RA__JOIN__ANTI_LEFT_DEPENDENT});
 
     // 2.
     find_joins_by_markers(root, markers_joins);
@@ -1428,38 +1538,38 @@ void RaTree::decorrelate_all_exists(){
     };
 }
 
-void RaTree::find_subquery_markers(std::shared_ptr<Ra__Node> it, std::vector<std::pair<std::shared_ptr<Ra__Node>, std::shared_ptr<Ra__Node>>>& markers_joins, Ra__Join__JoinType marker_type){
+void RaTree::find_subquery_markers(std::shared_ptr<Ra__Node> it, std::vector<std::pair<std::shared_ptr<Ra__Node>, std::shared_ptr<Ra__Node>>>& markers_joins, std::vector<Ra__Join__JoinType> marker_types){
 
     if(it->node_case==RA__NODE__SELECTION){
         auto sel = std::static_pointer_cast<Ra__Node__Selection>(it);
-        find_subquery_markers(sel->predicate, markers_joins, marker_type);
+        find_subquery_markers(sel->predicate, markers_joins, marker_types);
     }
 
     else if(it->node_case==RA__NODE__BOOL_PREDICATE){
         auto bool_p = std::static_pointer_cast<Ra__Node__Bool_Predicate>(it);
         for(const auto& arg: bool_p->args){
-            find_subquery_markers(arg, markers_joins, marker_type);
+            find_subquery_markers(arg, markers_joins, marker_types);
         }
         return;
     }
 
     else if(it->node_case==RA__NODE__PREDICATE){
         auto p = std::static_pointer_cast<Ra__Node__Predicate>(it);
-        find_subquery_markers(p->left, markers_joins, marker_type);
-        find_subquery_markers(p->right, markers_joins, marker_type);
+        find_subquery_markers(p->left, markers_joins, marker_types);
+        find_subquery_markers(p->right, markers_joins, marker_types);
         return;
     }
 
     else if(it->node_case==RA__NODE__WHERE_SUBQUERY_MARKER){
         auto marker_ = std::static_pointer_cast<Ra__Node__Where_Subquery_Marker>(it);
-        if(marker_->type==marker_type){
+        if(std::find(marker_types.begin(), marker_types.end(),marker_->type)!=marker_types.end()){
             // add to markers
             markers_joins.push_back({it,nullptr});
         }
         return;
     }
     for(const auto& child: it->childNodes){
-        find_subquery_markers(child, markers_joins, marker_type);
+        find_subquery_markers(child, markers_joins, marker_types);
     }
     return;
 }

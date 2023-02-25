@@ -67,37 +67,22 @@ std::vector<const char*> Q1Q2 = {
 
 
 std::vector<const char*> tpch_correlated = {
-  /*Q2*/ "select s_acctbal, s_name, n_name, p_partkey, p_mfgr, s_address, s_phone, s_comment from part, supplier, partsupp, nation, region where p_partkey=ps_partkey and s_suppkey=ps_suppkey and p_size=15 and p_type like '%BRASS' and s_nationkey=n_nationkey and n_regionkey=r_regionkey and r_name='EUROPE' and ps_supplycost=(select min(ps_supplycost) from partsupp, supplier, nation, region where p_partkey=ps_partkey and s_suppkey=ps_suppkey and s_nationkey=n_nationkey and n_regionkey=r_regionkey and r_name='EUROPE') order by s_acctbal desc, n_name, s_name, p_partkey",
+  // /*Q2*/ "select s_acctbal, s_name, n_name, p_partkey, p_mfgr, s_address, s_phone, s_comment from part, supplier, partsupp, nation, region where p_partkey=ps_partkey and s_suppkey=ps_suppkey and p_size=15 and p_type like '%BRASS' and s_nationkey=n_nationkey and n_regionkey=r_regionkey and r_name='EUROPE' and ps_supplycost=(select min(ps_supplycost) from partsupp, supplier, nation, region where p_partkey=ps_partkey and s_suppkey=ps_suppkey and s_nationkey=n_nationkey and n_regionkey=r_regionkey and r_name='EUROPE') order by s_acctbal desc, n_name, s_name, p_partkey",
   /*Q4*/ "select o_orderpriority, count(*) as order_count from orders where o_orderdate>=date '1993-07-01' and o_orderdate < date '1993-07-01'+interval '3' month and exists (select * from lineitem where l_orderkey=o_orderkey and l_commitdate<l_receiptdate ) group by o_orderpriority order by o_orderpriority",
-  /*Q17*/ "select sum(l_extendedprice)/7.0 as avg_yearly from lineitem, part where p_partkey=l_partkey and p_brand='Brand#23' and p_container='MED BOX' and l_quantity<(select 0.2 * avg(l_quantity) from lineitem where l_partkey=p_partkey)",
-  /*Q20*/ "select s_name, s_address from supplier, nation where s_suppkey in (select ps_suppkey from partsupp where ps_partkey in (select p_partkey from part where p_name like 'forest%') and ps_availqty>(select 0.5*sum(l_quantity) from lineitem where l_partkey=ps_partkey and l_suppkey=ps_suppkey and l_shipdate>=date '1994-01-01' and l_shipdate<date '1994-01-01'+interval '1' year)) and s_nationkey=n_nationkey and n_name='CANADA' order by s_name",
-  /*Q21*/ "select s_name, count(*) as numwait from supplier, lineitem l1, orders, nation where s_suppkey=l1.l_suppkey and o_orderkey=l1.l_orderkey and o_orderstatus='F' and l1.l_receiptdate>l1.l_commitdate and exists (select * from lineitem l2 where l2.l_orderkey=l1.l_orderkey and l2.l_suppkey<>l1.l_suppkey) and not exists (select * from lineitem l3 where l3.l_orderkey=l1.l_orderkey and l3.l_suppkey<>l1.l_suppkey and l3.l_receiptdate>l3.l_commitdate) and s_nationkey=n_nationkey and n_name='SAUDI ARABIA' group by s_name order by numwait desc, s_name",
-  /*Q22*/ "select cntrycode, count(*) as numcust, sum(c_acctbal) as totacctbal from (select substring(c_phone from 1 for 2) as cntrycode, c_acctbal from customer where substring(c_phone from 1 for 2) in ('13','31','23','29','30','18','17') and c_acctbal>(select avg(c_acctbal) from customer where c_acctbal>0.00 and substring (c_phone from 1 for 2) in ('13','31','23','29','30','18','17')) and not exists (select * from orders where o_custkey=c_custkey)) as custsale group by cntrycode order by cntrycode",
+  // /*Q17*/ "select sum(l_extendedprice)/7.0 as avg_yearly from lineitem, part where p_partkey=l_partkey and p_brand='Brand#23' and p_container='MED BOX' and l_quantity<(select 0.2 * avg(l_quantity) from lineitem where l_partkey=p_partkey)",
+  // /*Q20*/ "select s_name, s_address from supplier, nation where s_suppkey in (select ps_suppkey from partsupp where ps_partkey in (select p_partkey from part where p_name like 'forest%') and ps_availqty>(select 0.5*sum(l_quantity) from lineitem where l_partkey=ps_partkey and l_suppkey=ps_suppkey and l_shipdate>=date '1994-01-01' and l_shipdate<date '1994-01-01'+interval '1' year)) and s_nationkey=n_nationkey and n_name='CANADA' order by s_name",
+  // /*Q21*/ "select s_name, count(*) as numwait from supplier, lineitem l1, orders, nation where s_suppkey=l1.l_suppkey and o_orderkey=l1.l_orderkey and o_orderstatus='F' and l1.l_receiptdate>l1.l_commitdate and exists (select * from lineitem l2 where l2.l_orderkey=l1.l_orderkey and l2.l_suppkey<>l1.l_suppkey) and not exists (select * from lineitem l3 where l3.l_orderkey=l1.l_orderkey and l3.l_suppkey<>l1.l_suppkey and l3.l_receiptdate>l3.l_commitdate) and s_nationkey=n_nationkey and n_name='SAUDI ARABIA' group by s_name order by numwait desc, s_name",
+  // /*Q22*/ "select cntrycode, count(*) as numcust, sum(c_acctbal) as totacctbal from (select substring(c_phone from 1 for 2) as cntrycode, c_acctbal from customer where substring(c_phone from 1 for 2) in ('13','31','23','29','30','18','17') and c_acctbal>(select avg(c_acctbal) from customer where c_acctbal>0.00 and substring (c_phone from 1 for 2) in ('13','31','23','29','30','18','17')) and not exists (select * from orders where o_custkey=c_custkey)) as custsale group by cntrycode order by cntrycode",
 };
 
 std::vector<const char*> tpch_extended = {
-  // "select l.l_partkey, l.l_suppkey from lineitem l, partsupp ps where l.l_partkey=ps.ps_partkey and l.l_quantity=( select max(l2.l_quantity) from lineitem l2, part p where l2.l_partkey=ps.ps_partkey and p.p_partkey=ps.ps_partkey )",
-  "select l.l_partkey, l.l_suppkey from lineitem l, partsupp ps where l.l_partkey=ps.ps_partkey and l.l_partkey<10 and l.l_quantity=( select max(l2.l_quantity) from lineitem l2, part p where l2.l_partkey=ps.ps_partkey and p.p_partkey=ps.ps_partkey )"
+  // "select l.l_partkey, l.l_suppkey from lineitem l, partsupp ps where l.l_partkey=ps.ps_partkey and l.l_partkey<10 and l.l_quantity=( select max(l2.l_quantity) from lineitem l2, part p where l2.l_partkey=ps.ps_partkey and p.p_partkey=ps.ps_partkey )",
+  /*Q4 extended*/ "select o_orderpriority, count(*) as order_count from orders where o_orderdate >= date '1993-07-01' and o_orderdate < date '1993-07-01' + interval '3' month and exists ( select * from lineitem, partsupp where l_orderkey = o_orderkey and l_commitdate < l_receiptdate and l_partkey = ps_partkey ) group by o_orderpriority order by o_orderpriority;",
+  // /*Q4 extended*/ "select o_orderpriority, count(*) as order_count from orders where o_orderdate >= date '1993-07-01' and o_orderdate < date '1993-07-01' + interval '3' month and o_orderkey in ( select l_orderkey from lineitem, partsupp where o_orderkey = l_orderkey and l_partkey = ps_partkey ) group by o_orderpriority order by o_orderpriority;",
 };
 
 std::vector<const char*> q_extended = {
   /* both sides correlated */ "select s.name,t.vorlnr from studenten s, pruefen t where s.matrnr=t.matrnr and t.note=(select min(t2.note) from pruefen t2, professoren p where s.matrnr=t2.matrnr and p.persnr=t.persnr)",
-  // /*Q0' multiple correlations */ "select s.name,t.lecturenr from students s, test t where s.studnr=t.studnr and t.grade=(select min(t2.grade) from test t2 where s.studnr=t2.studnr) and t.grade=(select max(t2.grade) from test t2 where s.studnr=t2.studnr)",
-  // /*Q1' inner join (both sides correlated)*/ "select s.name,t.lecturenr from students s, test t where s.studnr=t.studnr and t.grade=(select min(t2.grade) from test t2 join professors p on s.studnr=t2.studnr and p.persnr=t.persnr)",
-  // /*Q2' left outer join*/ "select s.name,t.lecturenr from students s, test t where s.studnr=t.studnr and t.grade=(select min(t2.grade) from test t2 left join professors p on t2.studnr=p.persnr where s.studnr=t2.studnr)",
-  // /*Q2'' left outer join (both sides correlated)*/ "select s.name,t.lecturenr from students s, test t where s.studnr=t.studnr and t.grade=(select min(t2.grade) from test t2 left join professors p on t2.studnr=p.persnr where s.studnr=t2.studnr and p.persnr=t.persnr)",
-  // /*Q3' full outer join*/ "select s.name,t.lecturenr from students s, test t where s.studnr=t.studnr and t.grade=(select min(t2.grade) from test t2 full outer join professors p on t2.studnr=p.persnr where s.studnr=t2.studnr) ",
-  // /*Q4' in join (?)*/ "select s.name,t.lecturenr from students s, test t where s.studnr=t.studnr and t.grade=(select min(t2.grade) from test t2 where s.studnr=t2.studnr and t2.studnr in ( select p.persnr from professors p ) )",
-  // /*Q4'' in join (both sides correlated) (?)*/ " select s.name,t.lecturenr from students s, test t where s.studnr=t.studnr and t.grade=(select min(t2.grade) from test t2 where s.studnr=t2.studnr and s.studnr in ( select p.persnr from professors p ) ) ",
-  // /*Q5' anti in join (?)*/ "select s.name,t.lecturenr from students s, test t where s.studnr=t.studnr and t.grade=(select min(t2.grade) from test t2 where s.studnr=t2.studnr and t2.studnr not in ( select p.persnr from professors p ) )",
-  // /*Q5'' anti in join (both sides correlated) (?)*/ "select s.name,t.lecturenr from students s, test t where s.studnr=t.studnr and t.grade=(select min(t2.grade) from test t2 where s.studnr=t2.studnr and s.studnr not in ( select p.persnr from professors p ) )",
-  // /*Q6' semi join (exists)*/ "select s.name,t.lecturenr from students s, test t where s.studnr=t.studnr and t.grade=(select min(t2.grade) from test t2 where s.studnr=t2.studnr and exists ( select p.persnr from professors p ) )",
-  // /*Q6'' semi join (exists) (both sides correlated)*/ "select s.name,t.lecturenr from students s, test t where s.studnr=t.studnr and t.grade=(select min(t2.grade) from test t2 where s.studnr=t2.studnr and exists ( select p.persnr from professors p where p.persnr=s.studnr) )",
-  // /*Q7' anti join (not exists)*/ "select s.name,t.lecturenr from students s, test t where s.studnr=t.studnr and t.grade=(select min(t2.grade) from test t2 where s.studnr=t2.studnr and not exists ( select p.persnr from professors p) )",
-  // /*Q7'' anti join (not exists) (both sides correlated)*/ "select s.name,t.lecturenr from students s, test t where s.studnr=t.studnr and t.grade=(select min(t2.grade) from test t2 where s.studnr=t2.studnr and not exists ( select p.persnr from professors p where p.persnr=s.studnr) )",
-  // /*Q8' union*/ "select s.name,t.lecturenr from students s, test t where s.studnr=t.studnr and t.grade=(select min(t3.grade) from ((select t2.studnr, t2.grade from test t2) union (select t2.studnr, t2.grade from test t2)) as t3 where s.studnr=t3.studnr )",
-  // /*Q9' intersect*/ "select s.name,t.lecturenr from students s, test t where s.studnr=t.studnr and t.grade=(select min(t3.grade) from ((select t2.studnr, t2.grade from test t2) intersect (select t2.studnr, t2.grade from test t2)) as t3 where s.studnr=t3.studnr )",
-  // /*Q10' division (except?)*/ "select s.name,t.lecturenr from students s, test t where s.studnr=t.studnr and t.grade=(select min(t3.grade) from ((select t2.studnr, t2.grade from test t2) except (select t2.studnr, t2.grade from test t2)) as t3 where s.studnr=t3.studnr )",
 };
 
 
@@ -246,8 +231,8 @@ int main() {
   // run_tests_correlated();
   // run_q1q2();
   // run_q_extended();
-  run_tpch_correlated();
-  run_tpch_uncorrelated();
+  // run_tpch_correlated();
+  // run_tpch_uncorrelated();
   run_tpch_extended();
   // parse_json();
   // Optional, this ensures all memory is freed upon program exit (useful when running Valgrind)
