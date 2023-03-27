@@ -11,6 +11,228 @@ RAtoSQL::RAtoSQL(std::shared_ptr<RaTree> _raTree)
 :raTree(_raTree){
 };
 
+std::string RAtoSQL::deparse(){
+    std::string cte_str = deparse_ctes(raTree->ctes);
+    std::string select_str = deparse_projection(raTree->root);
+    return cte_str + select_str;
+}
+
+std::string RAtoSQL::deparse_ctes(std::vector<std::shared_ptr<Ra__Node>> ctes){
+    std::string sql = "";
+    if(ctes.size()>0){
+        sql += "with ";
+        for(auto& cte: ctes){
+            auto cte_pr = std::static_pointer_cast<Ra__Node__Projection>(cte);
+            std::string cte_cols = "";
+            if(cte_pr->subquery_columns.size()>0){
+                cte_cols += "(";
+                for(auto& col: cte_pr->subquery_columns){
+                    cte_cols += col + ",";
+                }
+                cte_cols.pop_back();
+                cte_cols += ")";
+            }
+            sql += cte_pr->subquery_alias + cte_cols + " as (\n";
+            sql += deparse_projection(cte);
+            sql += "),";
+        }
+        sql.pop_back();
+        sql += "\n";
+    }
+    return sql;
+}
+
+std::string RAtoSQL::deparse_projection(std::shared_ptr<Ra__Node> node){
+
+    std::string select = "";
+    std::string from = "";
+    std::string where = "";
+    std::string group_by = "";
+    std::string having = "";
+    std::string order_by = "";
+
+    deparse_ra_node(node, 0, select, where, from, group_by, having, order_by);
+
+    if(select.length()==0){
+        select = "*";
+    }
+    else{
+        select.pop_back();
+        select.pop_back();
+    }
+    std::string sql = select + "\n";
+    
+    if(from.length()>0){
+        sql += "from " + from + "\n";
+    }
+    
+    if(where.length()>0){
+        sql += "where " + where + "\n";
+    }
+
+    if(group_by.length()>0){
+        sql += "group by " + group_by + "\n";
+    }
+
+    if(having.length()>0){
+        sql += "having " + having + "\n";
+    }
+
+    if(order_by.length()>0){
+        sql += "order by " + order_by + "\n";
+    }
+
+    return sql;
+}
+
+void RAtoSQL::deparse_ra_node(std::shared_ptr<Ra__Node> node, size_t layer, 
+    std::string& select, 
+    std::string& where, 
+    std::string& from,
+    std::string& group_by,
+    std::string& having,
+    std::string& order_by){
+
+    assert(node->is_full());
+    switch(node->node_case){
+        case RA__NODE__ROOT: {
+            deparse_ra_node(node->childNodes[0], layer, select, where, from, group_by, having, order_by);
+            break;
+        }
+        case RA__NODE__SELECTION: {
+            if(where.length()>0 && std::static_pointer_cast<Ra__Node__Selection>(node)->predicate->node_case==RA__NODE__BOOL_PREDICATE){
+                where += " and ";
+                where += "(" + deparse_selection(node) + ")";
+            }
+            else if(where.length()>0){
+                where += " and ";
+                where += deparse_selection(node);
+            }
+            else{
+                where += deparse_selection(node);
+            }
+            deparse_ra_node(node->childNodes[0], layer, select, where, from, group_by, having, order_by);
+            break;
+        }
+        case RA__NODE__PROJECTION: {
+            auto pr = std::static_pointer_cast<Ra__Node__Projection>(node);
+            if(layer==0){
+                select = "select ";
+                if(pr->distinct){
+                    select += "distinct ";
+                }
+                select += deparse_expressions(pr->args) + ", ";
+                layer++;
+                deparse_ra_node(node->childNodes[0], layer, select, where, from, group_by, having, order_by);
+            }
+            else{
+                if(pr->subquery_columns.size()>0){
+                    std::string subquery_columns = "";
+                    for(auto& col_rename: pr->subquery_columns){
+                        subquery_columns += col_rename + ",";
+                    }
+                    subquery_columns.pop_back();
+                    from += "(" + deparse_projection(node) + ") as " + pr->subquery_alias + "(" + subquery_columns + ")";
+                }
+                else{
+                    from += "(" + deparse_projection(node) + ") as " + pr->subquery_alias; 
+                }
+            }
+            break;
+        }
+        case RA__NODE__GROUP_BY: {
+            auto gb = std::static_pointer_cast<Ra__Node__Group_By>(node);
+            if(!gb->implicit){
+                group_by += deparse_expressions(gb->args);
+            }
+            deparse_ra_node(gb->childNodes[0], layer, select, where, from, group_by, having, order_by);
+            break;
+        }
+        case RA__NODE__ORDER_BY: {
+            auto ob = std::static_pointer_cast<Ra__Node__Order_By>(node);
+            order_by += deparse_order_by_expressions(ob->args, ob->directions);
+            deparse_ra_node(ob->childNodes[0], layer, select, where, from, group_by, having, order_by);
+            break;
+        }
+        case RA__NODE__HAVING: {
+            auto ha = std::static_pointer_cast<Ra__Node__Having>(node);
+            having += deparse_predicate(ha->predicate);
+            deparse_ra_node(ha->childNodes[0], layer, select, where, from, group_by, having, order_by);
+            break;
+        }
+        case RA__NODE__RELATION: {
+            from += deparse_relation(node);
+            break;
+        }
+        case RA__NODE__JOIN: {
+            auto join = std::static_pointer_cast<Ra__Node__Join>(node);
+            // switch case join type
+            assert(join->is_full());
+            if(std::static_pointer_cast<Ra__Node__Join>(node)->right_where_subquery_marker->marker>0){
+                deparse_ra_node(join->childNodes[0], layer, select, where, from, group_by, having, order_by);
+                break;
+            }
+            switch(join->type){
+                case RA__JOIN__CROSS_PRODUCT:{
+                    deparse_ra_node(join->childNodes[0], layer, select, where, from, group_by, having, order_by);
+                    from += ", ";
+                    deparse_ra_node(join->childNodes[1], layer, select, where, from, group_by, having, order_by);
+                    break;
+                }
+                case RA__JOIN__INNER: 
+                case RA__JOIN__LEFT: 
+                case RA__JOIN__DEPENDENT_INNER_LEFT:  {
+                    // from += "(";
+                    deparse_ra_node(join->childNodes[0],layer, select, where, from, group_by, having, order_by);
+                    from += join->join_name();
+                    deparse_ra_node(join->childNodes[1],layer, select, where, from, group_by, having, order_by);
+                    if(join->predicate!=nullptr){
+                        from +=  " on " + deparse_predicate(join->predicate);
+                    }
+                    // from += ")";
+                    if(join->alias.length()>0){
+                        from += " as " + join->alias; 
+                    } 
+                    if(join->columns.size()>0){
+                        std::string columns = "(";
+                        for(auto& col: join->columns){
+                            columns += col + ",";
+                        }
+                        columns.pop_back();
+                        columns += ")";
+                        from += columns;
+                    };
+                    break;
+                }
+                // exists, not exists
+                case RA__JOIN__SEMI_LEFT: 
+                case RA__JOIN__SEMI_LEFT_DEPENDENT:
+                case RA__JOIN__ANTI_LEFT: 
+                case RA__JOIN__ANTI_LEFT_DEPENDENT: {
+                    std::cout << "Right subquery should have marker" << std::endl;
+                    break;
+                }
+                default: std::cout << "Join type not supported in decorrelation" << std::endl;
+            }
+            break;
+        }
+        case RA__NODE__VALUES:{
+            auto values = std::static_pointer_cast<Ra__Node__Values>(node);
+            from += "(values";
+            for(auto& v: values->values){
+                from += "(" + deparse_expression(v) + "),";
+            }
+            from.pop_back();
+            from += ") as " + values->alias + "(" + values->column + ")";
+            break;
+        }
+        default: {
+            // nothing to do
+            break;
+        }
+    }
+}
+
 std::string RAtoSQL::deparse_expression(std::shared_ptr<Ra__Node> arg){
     std::string result = "";
 
@@ -305,226 +527,4 @@ std::string RAtoSQL::deparse_selection(std::shared_ptr<Ra__Node> node){
 std::string RAtoSQL::deparse_relation(std::shared_ptr<Ra__Node> node){
     auto relation = std::static_pointer_cast<Ra__Node__Relation>(node);
     return relation->alias.length()>0 ? relation->name + " " + relation->alias : relation->name;
-}
-
-void RAtoSQL::deparse_ra_node(std::shared_ptr<Ra__Node> node, size_t layer, 
-    std::string& select, 
-    std::string& where, 
-    std::string& from,
-    std::string& group_by,
-    std::string& having,
-    std::string& order_by){
-
-    assert(node->is_full());
-    switch(node->node_case){
-        case RA__NODE__ROOT: {
-            deparse_ra_node(node->childNodes[0], layer, select, where, from, group_by, having, order_by);
-            break;
-        }
-        case RA__NODE__SELECTION: {
-            if(where.length()>0 && std::static_pointer_cast<Ra__Node__Selection>(node)->predicate->node_case==RA__NODE__BOOL_PREDICATE){
-                where += " and ";
-                where += "(" + deparse_selection(node) + ")";
-            }
-            else if(where.length()>0){
-                where += " and ";
-                where += deparse_selection(node);
-            }
-            else{
-                where += deparse_selection(node);
-            }
-            deparse_ra_node(node->childNodes[0], layer, select, where, from, group_by, having, order_by);
-            break;
-        }
-        case RA__NODE__PROJECTION: {
-            auto pr = std::static_pointer_cast<Ra__Node__Projection>(node);
-            if(layer==0){
-                select = "select ";
-                if(pr->distinct){
-                    select += "distinct ";
-                }
-                select += deparse_expressions(pr->args) + ", ";
-                layer++;
-                deparse_ra_node(node->childNodes[0], layer, select, where, from, group_by, having, order_by);
-            }
-            else{
-                if(pr->subquery_columns.size()>0){
-                    std::string subquery_columns = "";
-                    for(auto& col_rename: pr->subquery_columns){
-                        subquery_columns += col_rename + ",";
-                    }
-                    subquery_columns.pop_back();
-                    from += "(" + deparse_projection(node) + ") as " + pr->subquery_alias + "(" + subquery_columns + ")";
-                }
-                else{
-                    from += "(" + deparse_projection(node) + ") as " + pr->subquery_alias; 
-                }
-            }
-            break;
-        }
-        case RA__NODE__GROUP_BY: {
-            auto gb = std::static_pointer_cast<Ra__Node__Group_By>(node);
-            if(!gb->implicit){
-                group_by += deparse_expressions(gb->args);
-            }
-            deparse_ra_node(gb->childNodes[0], layer, select, where, from, group_by, having, order_by);
-            break;
-        }
-        case RA__NODE__ORDER_BY: {
-            auto ob = std::static_pointer_cast<Ra__Node__Order_By>(node);
-            order_by += deparse_order_by_expressions(ob->args, ob->directions);
-            deparse_ra_node(ob->childNodes[0], layer, select, where, from, group_by, having, order_by);
-            break;
-        }
-        case RA__NODE__HAVING: {
-            auto ha = std::static_pointer_cast<Ra__Node__Having>(node);
-            having += deparse_predicate(ha->predicate);
-            deparse_ra_node(ha->childNodes[0], layer, select, where, from, group_by, having, order_by);
-            break;
-        }
-        case RA__NODE__RELATION: {
-            from += deparse_relation(node);
-            break;
-        }
-        case RA__NODE__JOIN: {
-            auto join = std::static_pointer_cast<Ra__Node__Join>(node);
-            // switch case join type
-            assert(join->is_full());
-            if(std::static_pointer_cast<Ra__Node__Join>(node)->right_where_subquery_marker->marker>0){
-                deparse_ra_node(join->childNodes[0], layer, select, where, from, group_by, having, order_by);
-                break;
-            }
-            switch(join->type){
-                case RA__JOIN__CROSS_PRODUCT:{
-                    deparse_ra_node(join->childNodes[0], layer, select, where, from, group_by, having, order_by);
-                    from += ", ";
-                    deparse_ra_node(join->childNodes[1], layer, select, where, from, group_by, having, order_by);
-                    break;
-                }
-                case RA__JOIN__INNER: 
-                case RA__JOIN__LEFT: 
-                case RA__JOIN__DEPENDENT_INNER_LEFT:  {
-                    // from += "(";
-                    deparse_ra_node(join->childNodes[0],layer, select, where, from, group_by, having, order_by);
-                    from += join->join_name();
-                    deparse_ra_node(join->childNodes[1],layer, select, where, from, group_by, having, order_by);
-                    if(join->predicate!=nullptr){
-                        from +=  " on " + deparse_predicate(join->predicate);
-                    }
-                    // from += ")";
-                    if(join->alias.length()>0){
-                        from += " as " + join->alias; 
-                    } 
-                    if(join->columns.size()>0){
-                        std::string columns = "(";
-                        for(auto& col: join->columns){
-                            columns += col + ",";
-                        }
-                        columns.pop_back();
-                        columns += ")";
-                        from += columns;
-                    };
-                    break;
-                }
-                // exists, not exists
-                case RA__JOIN__SEMI_LEFT: 
-                case RA__JOIN__SEMI_LEFT_DEPENDENT:
-                case RA__JOIN__ANTI_LEFT: 
-                case RA__JOIN__ANTI_LEFT_DEPENDENT: {
-                    std::cout << "Right subquery should have marker" << std::endl;
-                    break;
-                }
-                default: std::cout << "Join type not supported in decorrelation" << std::endl;
-            }
-            break;
-        }
-        case RA__NODE__VALUES:{
-            auto values = std::static_pointer_cast<Ra__Node__Values>(node);
-            from += "(values";
-            for(auto& v: values->values){
-                from += "(" + deparse_expression(v) + "),";
-            }
-            from.pop_back();
-            from += ") as " + values->alias + "(" + values->column + ")";
-            break;
-        }
-        default: {
-            // nothing to do
-            break;
-        }
-    }
-}
-
-std::string RAtoSQL::deparse_projection(std::shared_ptr<Ra__Node> node){
-
-    std::string select = "";
-    std::string from = "";
-    std::string where = "";
-    std::string group_by = "";
-    std::string having = "";
-    std::string order_by = "";
-
-    deparse_ra_node(node, 0, select, where, from, group_by, having, order_by);
-
-    if(select.length()==0){
-        select = "*";
-    }
-    else{
-        select.pop_back();
-        select.pop_back();
-    }
-    std::string sql = select + "\n";
-    
-    if(from.length()>0){
-        sql += "from " + from + "\n";
-    }
-    
-    if(where.length()>0){
-        sql += "where " + where + "\n";
-    }
-
-    if(group_by.length()>0){
-        sql += "group by " + group_by + "\n";
-    }
-
-    if(having.length()>0){
-        sql += "having " + having + "\n";
-    }
-
-    if(order_by.length()>0){
-        sql += "order by " + order_by + "\n";
-    }
-
-    return sql;
-}
-
-std::string RAtoSQL::deparse_ctes(std::vector<std::shared_ptr<Ra__Node>> ctes){
-    std::string sql = "";
-    if(ctes.size()>0){
-        sql += "with ";
-        for(auto& cte: ctes){
-            auto cte_pr = std::static_pointer_cast<Ra__Node__Projection>(cte);
-            std::string cte_cols = "";
-            if(cte_pr->subquery_columns.size()>0){
-                cte_cols += "(";
-                for(auto& col: cte_pr->subquery_columns){
-                    cte_cols += col + ",";
-                }
-                cte_cols.pop_back();
-                cte_cols += ")";
-            }
-            sql += cte_pr->subquery_alias + cte_cols + " as (\n";
-            sql += deparse_projection(cte);
-            sql += "),";
-        }
-        sql.pop_back();
-        sql += "\n";
-    }
-    return sql;
-}
-
-std::string RAtoSQL::deparse(){
-    std::string cte_str = deparse_ctes(raTree->ctes);
-    std::string select_str = deparse_projection(raTree->root);
-    return cte_str + select_str;
 }

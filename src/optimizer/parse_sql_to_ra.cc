@@ -8,6 +8,19 @@ SQLtoRA::SQLtoRA(){
     ra_tree_root = nullptr;
 }
 
+std::shared_ptr<RaTree> SQLtoRA::parse(const char* query){
+
+    PgQueryProtobufParseResult result = pg_query_parse_protobuf(query);
+    std::shared_ptr<PgQuery__ParseResult> parse_result(pg_query__parse_result__unpack(NULL, result.parse_tree.len, (const uint8_t*) result.parse_tree.data));
+
+    // currently only supports parsing the first statement
+    assert(parse_result->n_stmts==1);
+    std::shared_ptr<PgQuery__Node> stmt(parse_result->stmts[0]->stmt);
+    ra_tree_root = parse_select_statement(stmt->select_stmt);
+
+    return std::make_shared<RaTree>(ra_tree_root, ctes, counter);
+}
+
 void SQLtoRA::parse_expression(PgQuery__Node* node, std::shared_ptr<Ra__Node>& ra_arg, bool& has_aggregate){
     switch(node->node_case){
         case PG_QUERY__NODE__NODE_COLUMN_REF: {
@@ -932,14 +945,12 @@ std::shared_ptr<Ra__Node> SQLtoRA::parse_select_statement(PgQuery__SelectStmt* s
     /* HAVING */
     std::shared_ptr<Ra__Node> having_operator = parse_having(select_stmt->having_clause);
     if(having_operator != nullptr){
-        // add sort underneath projection
         add_subtree(root, having_operator);
     }
 
     /* GROUP BY */
     std::shared_ptr<Ra__Node> group_by = parse_group_by(select_stmt->group_clause, select_stmt->n_group_clause);
     if(group_by != nullptr){
-        // add sort underneath projection
         add_subtree(root, group_by);
     }
 
@@ -959,16 +970,3 @@ std::shared_ptr<Ra__Node> SQLtoRA::parse_select_statement(PgQuery__SelectStmt* s
 
     return root;
 };
-
-std::shared_ptr<RaTree> SQLtoRA::parse(const char* query){
-
-    PgQueryProtobufParseResult result = pg_query_parse_protobuf(query);
-    std::shared_ptr<PgQuery__ParseResult> parse_result(pg_query__parse_result__unpack(NULL, result.parse_tree.len, (const uint8_t*) result.parse_tree.data));
-
-    // currently only supports parsing the first statement
-    assert(parse_result->n_stmts==1);
-    std::shared_ptr<PgQuery__Node> stmt(parse_result->stmts[0]->stmt);
-    ra_tree_root = parse_select_statement(stmt->select_stmt);
-
-    return std::make_shared<RaTree>(ra_tree_root, ctes, counter);
-}

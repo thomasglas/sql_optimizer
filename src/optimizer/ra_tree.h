@@ -29,7 +29,7 @@ class RaTree {
         // works: (false,true), (false,false), (true,true)
         const bool push_down_correlating_predicates = false;
         const bool decouple = true;
-        const bool convert_cp_to_join = true;
+        const bool convert_cp_to_join = false;
 
         void decorrelate_all_exists_in_subqueries();
 
@@ -43,7 +43,7 @@ class RaTree {
         /**
          * Decorrelates all basic subqueries (excl. exists, in)
          */
-        void decorrelate_arbitrary_queries();
+        void general_query_unnesting();
 
         /**
          * Decorrelate a basic subquery

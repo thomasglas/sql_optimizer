@@ -9,7 +9,7 @@ RaTree::RaTree(std::shared_ptr<Ra__Node> _root, std::vector<std::shared_ptr<Ra__
 void RaTree::optimize(){
     push_down_predicates(false);
     decorrelate_all_exists_in_subqueries();
-    decorrelate_arbitrary_queries();
+    general_query_unnesting();
     push_down_predicates(convert_cp_to_join);
 }
 
@@ -124,6 +124,7 @@ void RaTree::decorrelate_exists_in_subquery(std::pair<std::shared_ptr<Ra__Node>,
     // 3. move subquery into CTE
         // 3.1 remove correlating predicates
     // 4. in original subquery, select where on correlating attributes
+        // 4.1 select from cte
 
     std::shared_ptr<Ra__Node> subquery_projection = (marker_join.second)->childNodes[1];
 
@@ -156,7 +157,7 @@ void RaTree::decorrelate_exists_in_subquery(std::pair<std::shared_ptr<Ra__Node>,
 
     // 3.1
     if(!is_boolean_predicate){
-        it = subquery_projection;
+        it = cte_projection;
         int child_index = -1;
         get_node_parent(it, sel, child_index);
         assert(it->n_children==1 && child_index==0); // parent should have single child
@@ -179,6 +180,15 @@ void RaTree::decorrelate_exists_in_subquery(std::pair<std::shared_ptr<Ra__Node>,
             sel->predicate = bool_p->args[0];
             bool_p->args.pop_back();
         }
+        // if no more predicates left, remove selection node
+        else if(bool_p->args.size()==0){
+            it = cte_projection;
+            int child_index = -1;
+            get_node_parent(it, sel, child_index);
+            assert(it->n_children==1 && child_index==0); // parent should have single child
+            it->childNodes[child_index] = sel->childNodes[0];
+            sel->childNodes.pop_back();
+        }
     }
 
     // 4.
@@ -200,8 +210,10 @@ void RaTree::decorrelate_exists_in_subquery(std::pair<std::shared_ptr<Ra__Node>,
             auto right = std::make_shared<Ra__Node__Attribute>(outer_attribute->name, outer_attribute->alias);
             bool_p->args.push_back(std::make_shared<Ra__Node__Predicate>(left, right, std::get<2>(correlating_predicate)));
         }
+        new_subquery_selection->predicate = bool_p;
     }
 
+    // 4.1
     new_subquery_selection->childNodes.push_back(std::make_shared<Ra__Node__Relation>(cte_name));
     auto new_subquery_projection = std::make_shared<Ra__Node__Projection>();
     new_subquery_projection->args = std::static_pointer_cast<Ra__Node__Projection>(subquery_projection)->args;
@@ -512,7 +524,7 @@ void RaTree::split_selection_predicates(std::shared_ptr<Ra__Node> predicate, std
     }
 }
 
-void RaTree::decorrelate_arbitrary_queries(){
+void RaTree::general_query_unnesting(){
     // find marker in selection
     std::vector<std::pair<std::shared_ptr<Ra__Node>, std::shared_ptr<Ra__Node>>> markers_joins; // markers, joins
     
@@ -548,7 +560,6 @@ void RaTree::decorrelate_subquery(std::pair<std::shared_ptr<Ra__Node>, std::shar
         // 4.2 rename all d attribute alias to their original alias (whole right side)
         // 4.3 remove a=a predicates
     // 5. If can't decouple, move to CTE
-        // TODO: rename attributes to unique names in projection, create rename map for whole query
         // 5.1 create projection on left side, add to CTEs
         // 5.2 get relations/aliases used in CTE
         // 5.3 go through tree, find attributes used from CTE, add to CTE select expressions
