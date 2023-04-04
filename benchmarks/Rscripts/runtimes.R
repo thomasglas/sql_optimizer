@@ -9,7 +9,7 @@ library(ggimage)
 theme_set(theme_bw())  # pre-set the bw theme.
 
 ##### READ RUNTIMES #####
-tpch <- read.csv('C:\\Users\\thoma\\Documents\\Uni\\sql_optimizer\\benchmarks\\runtimes.csv')
+tpch <- read.csv('C:\\Users\\thoma\\Documents\\Uni\\sql_optimizer\\benchmarks\\runtimes_umbra.csv')
 tpch$query <- factor(tpch$query, levels = c('Q1','Q2','Q3','Q4','Q5','Q6','Q7','Q8','Q9','Q10','Q11','Q12','Q13','Q14','Q15','Q16','Q17','Q18','Q19','Q20','Q21','Q22'))
 tpch$original <- as.numeric(as.character(tpch$original))
 tpch$decoupled <- as.numeric(as.character(tpch$decoupled))
