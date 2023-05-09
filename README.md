@@ -1,4 +1,3 @@
-[Work in progress]
 # SQL optimizer
 
 ## What is this project?
