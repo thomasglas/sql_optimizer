@@ -1,18 +1,19 @@
 # SQL optimizer
 
 ## What is this project?
-This tool is a C++ implementation of an SQL optimizer. It parses SQL (with [PostgreSQL parser](https://github.com/pganalyze/libpg_query)), builds a relational algebra tree, performs optimizations, and deparses the optimized relational algebra tree back to SQL. This tool aims to bring advanced SQL optimation techniques to all database systems, which may have not implemented these optimizations internally. The initial focus is on unnesting correlated subqueries, using the algorithm described in the paper ["Unnesting Arbitrary Queries"](https://www.semanticscholar.org/paper/Unnesting-Arbitrary-Queries-Neumann-Kemper/3112928019f64d8c388e8cfbae34b9887c789213). See "SQL Unnesting.pptx" for the slides of the final presentation of the project.
+This tool is a C++ implementation of an SQL optimizer. It parses SQL (with [PostgreSQL parser](https://github.com/pganalyze/libpg_query)), builds a relational algebra tree, performs optimizations, and deparses the optimized relational algebra tree back to SQL. This tool aims to bring advanced SQL optimation techniques to all database systems, which may have not implemented these optimizations internally. The initial focus is on unnesting correlated subqueries, using the algorithm described in the paper [Unnesting Arbitrary Queries](https://www.semanticscholar.org/paper/Unnesting-Arbitrary-Queries-Neumann-Kemper/3112928019f64d8c388e8cfbae34b9887c789213). 
 
-## Preliminary Results
-Following TPCH queries contain correlated subqueries, which lead to extremely long execution times, if a database's optimizer cannot decorrelate them. The benchmarks were run on PostgreSQL, whose optimizer is not able to decorrelate these queries. This tool has generated optimized forms for these queries, which result in significant performance improvements. 
+For details on the design and results of this project, see "SQL Unnesting - Final Report.pdf". For an overview, see "SQL Unnesting - Final Presentation.pdf" for the slides of the final presentation of the project.
+
+## Example Results
+Following TPCH queries contain correlated subqueries with extremely long execution times, since PostgreSQL's optimizer cannot decorrelate them. The TPCH queries (scale factor 1) were run on PostgreSQL their original form, and in the optimized form produced by this tool. Query runtime is sped up significantly. Similar results were achieved with MySQL and SQLite.
 
 | TPCH Query  | Original Query    | Optimized Query   |
 | ------------|-------------------| ------------------|
-| Q2          | 197.706 ms        | 140.944ms         |
-| Q17         | >10min (timeout)  | 2438.320ms        |
-| Q20         | >10min (timeout)  | 1546.563ms        |
+| Q17         | 45min             | 2.4s              |
+| Q20         | 76min             | 1.5s              |
 
-## Example
+## Example Query Transformation
 The original TPCH Q20:
 ```
 -- TPC-H Query 20
